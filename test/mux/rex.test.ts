@@ -7,7 +7,8 @@ import { pollForExit } from "../../src/mux/poll.ts";
 import { readFileSync, existsSync } from "node:fs";
 import { REX_CHILD, REX_PARENT, REX_SESSION, useFakeRex } from "../support/rex.ts";
 
-const mutations = (calls: string[][]) => calls.filter((args) => !args.includes("inspect") && !args.includes("capture") && !args.includes("wait"));
+const mutations = (calls: string[][]) => calls.filter((args) => !args.includes("inspect") && !args.includes("capture") && !args.includes("wait") &&
+	!(args.includes("call") && args.includes("size")));
 
 async function waitForPid(dir: string): Promise<void> {
 	for (let attempt = 0; attempt < 100; attempt++) {
@@ -63,7 +64,7 @@ describe("native Rex backend", () => {
 		const argv = ["/path with spaces/node", "runner.mjs", "$(not shell); 'quoted'"];
 		assert.equal(createRexCommandSurface("--Child label", argv, "/project with spaces"), REX_CHILD);
 		const [call] = mutations(f.calls());
-		assert.deepEqual(call, ["--autostart=false", "split", "-b", REX_PARENT, "--split", "right", "--focus=false",
+		assert.deepEqual(call, ["--autostart=false", "split", "-b", REX_PARENT, "--split", "right", "--ratio", "38", "--focus=false",
 			"--keep-open", "--shell=none", "--label", "--Child label", "-c", "/project with spaces", "--json",
 			"-s", REX_SESSION, "--", ...argv]);
 	});

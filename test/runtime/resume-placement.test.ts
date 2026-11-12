@@ -1,7 +1,8 @@
 import {
 	resolveResumeHerdrPlacementPolicy,
+	resolveResumeRexPlacementPolicy,
 	resolveResumeZellijPlacementPolicy,
-} from "../../src/runtime/resume-service.ts";
+} from "../../src/runtime/resume-placement.ts";
 import {
 	assert,
 	createTestDir,
@@ -115,6 +116,22 @@ describe("subagent_resume Zellij placement", () => {
 			),
 			"auto",
 		);
+	});
+});
+
+describe("subagent_resume Rex placement", () => {
+	const metadata = (value: object) => value as Parameters<typeof resolveResumeRexPlacementPolicy>[0];
+
+	it("prefers the agent value, then the current parent default, then the persisted policy", () => {
+		assert.equal(resolveResumeRexPlacementPolicy(metadata({ env: "PI_SUBAGENT_REX_PLACEMENT=tab", rexPlacementPolicy: "tab" }), "down"), "tab");
+		assert.equal(resolveResumeRexPlacementPolicy(metadata({ rexPlacementPolicy: "right" }), "down"), "down");
+		assert.equal(resolveResumeRexPlacementPolicy(metadata({ rexPlacementPolicy: "right" }), undefined), "right");
+		assert.equal(resolveResumeRexPlacementPolicy(undefined, undefined), undefined);
+	});
+
+	it("treats an empty agent or parent value as an explicit auto override", () => {
+		assert.equal(resolveResumeRexPlacementPolicy(metadata({ env: "PI_SUBAGENT_REX_PLACEMENT=", rexPlacementPolicy: "tab" }), "down"), "auto");
+		assert.equal(resolveResumeRexPlacementPolicy(metadata({ rexPlacementPolicy: "tab" }), ""), "auto");
 	});
 });
 

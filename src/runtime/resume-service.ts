@@ -35,8 +35,6 @@ import {
 	createSurface,
 	getMuxBackend,
 	muxSetupHint,
-	resolveHerdrPlacementPolicy,
-	resolveZellijPlacementPolicy,
 	sendShellCommand,
 } from "../mux.ts";
 import { clearSubagentExitSidecar } from "../session/exit-sidecar.ts";
@@ -65,6 +63,11 @@ import {
 	PI_SUBAGENT_TIMEOUT_WARN_THRESHOLD,
 } from "../tools/timeout-reminders.ts";
 import type { RunningSubagent, SubagentResult } from "../types.ts";
+import {
+	resolveResumeHerdrPlacementPolicy,
+	resolveResumeRexPlacementPolicy,
+	resolveResumeZellijPlacementPolicy,
+} from "./resume-placement.ts";
 import {
 	claimSpawnWidthSlot,
 	getLiveSlotCount,
@@ -112,26 +115,6 @@ function splitResumeModelRef(
 	return split.thinking === undefined
 		? { model, thinking: fallbackThinking, explicitThinking: false }
 		: { model: split.model, thinking: split.thinking, explicitThinking: true };
-}
-
-export function resolveResumeHerdrPlacementPolicy(
-	launchMetadata: PersistedSubagentLaunchMetadata | undefined,
-	parentPolicy: string | undefined,
-): ReturnType<typeof resolveHerdrPlacementPolicy> | undefined {
-	const agentPolicy = parseEnvString(launchMetadata?.env).PI_SUBAGENT_HERDR_PLACEMENT;
-	if (agentPolicy !== undefined) return resolveHerdrPlacementPolicy(agentPolicy);
-	if (parentPolicy !== undefined) return resolveHerdrPlacementPolicy(parentPolicy);
-	return launchMetadata?.herdrPlacementPolicy;
-}
-
-export function resolveResumeZellijPlacementPolicy(
-	launchMetadata: PersistedSubagentLaunchMetadata | undefined,
-	parentPolicy: string | undefined,
-): ReturnType<typeof resolveZellijPlacementPolicy> | undefined {
-	const agentPolicy = parseEnvString(launchMetadata?.env).PI_SUBAGENT_ZELLIJ_PLACEMENT;
-	if (agentPolicy !== undefined) return resolveZellijPlacementPolicy(agentPolicy);
-	if (parentPolicy !== undefined) return resolveZellijPlacementPolicy(parentPolicy);
-	return launchMetadata?.zellijPlacementPolicy;
 }
 
 export function resolveResumeLaunchMetadataForInvocation(
@@ -552,7 +535,9 @@ async function resumeSubagentSessionWithoutWidth(
 		running.disposeLaunchCapsule = dispose;
 		try {
 			const surface = rexTarget
-				? createRexCommandSurface(surfaceName, argv, resumeCwd ?? process.cwd())
+				? createRexCommandSurface(surfaceName, argv, resumeCwd ?? process.cwd(), {
+					policy: resolveResumeRexPlacementPolicy(invocationMetadata, process.env.PI_SUBAGENT_REX_PLACEMENT),
+				})
 				: ordinarySurface ??
 				(await createZellijCommandSurface(surfaceName, zellijTarget!, getZellijShellCommand(command), zellijContext));
 			if (!zellijTarget && !rexTarget) {

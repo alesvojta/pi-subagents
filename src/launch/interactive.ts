@@ -197,7 +197,9 @@ export async function launchInteractiveSubagent(
 	let surface: string;
 	try {
 		surface = rexTarget
-			? createRexCommandSurface(surfaceName, argv, launch.forcedCwd ?? prepared.runtimePaths.effectiveCwd ?? ctx.cwd)
+			? createRexCommandSurface(surfaceName, argv, launch.forcedCwd ?? prepared.runtimePaths.effectiveCwd ?? ctx.cwd, {
+				policy: launch.launchMetadata.rexPlacementPolicy,
+			})
 			: ordinarySurface ??
 			(await createZellijCommandSurface(surfaceName, zellijTarget!, getZellijShellCommand(command), zellijContext));
 		traceSubagentLaunch("interactive.surface", {

@@ -217,7 +217,7 @@ env: |
   SOME_VALUE=value,with,commas
 ```
 
-Pi splits `env` by line. It does not split values by comma. When you set `PI_CODING_AGENT_DIR`, the child uses that directory for its Pi config and sessions. For per-agent Herdr or Zellij placement, set `PI_SUBAGENT_HERDR_PLACEMENT` or `PI_SUBAGENT_ZELLIJ_PLACEMENT` here. The parent reads placement before the child pane exists. See [Herdr placement](#herdr-placement) and [Zellij placement](#zellij-placement).
+Pi splits `env` by line. It does not split values by comma. When you set `PI_CODING_AGENT_DIR`, the child uses that directory for its Pi config and sessions. For per-agent Rex, Herdr, or Zellij placement, set `PI_SUBAGENT_REX_PLACEMENT`, `PI_SUBAGENT_HERDR_PLACEMENT`, or `PI_SUBAGENT_ZELLIJ_PLACEMENT` here. The parent reads placement before the child pane exists. See [Rex placement](#rex-placement-and-lifecycle), [Herdr placement](#herdr-placement), and [Zellij placement](#zellij-placement).
 
 Children inherit every environment variable from the parent Pi process, in every launch mode. This includes API keys and tokens that you exported before you started Pi. `deny-env` in an agent file removes names from this inheritance. You can also set `PI_SUBAGENT_ENV_DENY` in the parent environment. Both lists apply.
 
@@ -936,6 +936,9 @@ User-facing knobs:
 | `PI_SUBAGENT_HERDR_PLACEMENT` | Herdr policy: `auto`, `right-stack`, `down-stack`, `right`, `down`, or `tab` |
 | `PI_SUBAGENT_HERDR_MIN_COLUMNS` | Minimum columns preserved by Herdr `auto` placement (default: `50`) |
 | `PI_SUBAGENT_HERDR_MIN_ROWS` | Minimum rows preserved by Herdr `auto` placement (default: `12`) |
+| `PI_SUBAGENT_REX_PLACEMENT` | Rex policy: `auto`, `right`, `down`, or `tab` |
+| `PI_SUBAGENT_REX_MIN_COLUMNS` | Minimum columns preserved by Rex `auto` placement (default: `50`) |
+| `PI_SUBAGENT_REX_MIN_ROWS` | Minimum rows preserved by Rex `auto` placement (default: `12`) |
 | `PI_SUBAGENT_ZELLIJ_PLACEMENT` | Zellij policy: `auto`, `right-stack`, `down-stack`, `floating`, or `tab-stack` |
 | `PI_SUBAGENT_ZELLIJ_MIN_COLUMNS` | Minimum usable columns for each side of a Zellij split (default: `50`) |
 | `PI_SUBAGENT_ZELLIJ_MIN_ROWS` | Minimum usable rows for each side of a Zellij split (default: `10`) |
@@ -966,7 +969,22 @@ Live test knobs:
 
 ## Rex placement and lifecycle
 
-Rex launches each interactive child in a block beside the caller's explicit block. Creation uses exact argv, the child's working directory, and `--focus=false`. It does not type a launch command into a shell or create a project session. Herdr placement options do not affect Rex.
+Rex launches each interactive child in a new block in the caller's Rex session. Creation uses exact argv, the child's working directory, and `--focus=false`. It does not type a launch command into a shell or create a project session. Herdr placement options do not affect Rex.
+
+Rex uses `auto` placement by default, with the same geometry rules as Herdr. The first child splits the caller's block and requests 62% of it for the parent when both halves stay usable. Later children halve the largest block owned by that parent, splitting right when the block is at least four times as many columns as rows and down otherwise. When no split leaves both halves usable, the child opens in a shared `Agents` window owned by that parent, and later children split inside it. A full `Agents` window leads to `Agents 2`. A child block that you move to another window is no longer split.
+
+`auto` preserves at least `PI_SUBAGENT_REX_MIN_COLUMNS` columns and `PI_SUBAGENT_REX_MIN_ROWS` rows in both halves. The defaults are `50` and `12`. The check happens before Rex creates the block, so a small window goes straight to the `Agents` window. Rex reports a default size for blocks that no client has displayed, including blocks in a window opened in the background. Placement therefore measures every block from the session layout and the caller's displayed size. When the caller's block is not displayed or Rex cannot report its size, the child opens in the `Agents` window instead of in a guessed split.
+
+Set `PI_SUBAGENT_REX_PLACEMENT` to change the policy:
+
+| Policy | Placement |
+| --- | --- |
+| `auto` | Geometry-aware placement, described above (default) |
+| `right` | Split the caller's block to the right on every launch |
+| `down` | Split the caller's block downward on every launch |
+| `tab` | Open each child in its own window named after the child |
+
+An agent can override the parent default through the [`env`](#agent-definitions) frontmatter, as with Herdr. A resume uses the agent's value first, then the current parent default, then the policy saved at launch.
 
 The child receives the existing parent-environment snapshot and its own Rex session/block identity. `PI_SUBAGENT_SURFACE` identifies the child block, not the parent's block. Rex does not require zsh; the existing Pi command or `PI_SUBAGENT_PI_COMMAND` wrapper remains in use. Native launches do not run interactive shell startup files.
 

@@ -248,7 +248,9 @@ export async function restartSubagentForTimeoutWrapUp(
 		disposeCapsule = dispose;
 		running.disposeLaunchCapsule = dispose;
 		if (rexTarget) {
-			surface = createRexCommandSurface(metadata.sessionTitle ?? running.title ?? running.name, argv, launch.cwd ?? process.cwd());
+			surface = createRexCommandSurface(metadata.sessionTitle ?? running.title ?? running.name, argv, launch.cwd ?? process.cwd(), {
+				policy: metadata.rexPlacementPolicy,
+			});
 			running.surface = surface;
 			running.rexTarget = rexChildTarget(rexTarget, surface);
 			throwIfAborted(signal);

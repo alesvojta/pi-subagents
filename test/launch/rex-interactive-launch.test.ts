@@ -10,7 +10,7 @@ import { disposeEnvCapsule } from "../../src/launch/env-capsule.ts";
 import { buildInteractiveShellCommand } from "../../src/launch/shell-command.ts";
 import { assert, describe, it, createTestDir, createSessionFile, SESSION_HEADER, MODEL_CHANGE, USER_MSG,
 	ASSISTANT_MSG, join, readFileSync, writeFileSync, writeExecutable, existsSync, readSubagentLaunchMetadataForTest } from "../support/index.ts";
-import { REX_CHILD, REX_PARENT, REX_SESSION, useFakeRex } from "../support/rex.ts";
+import { REX_CHILD, REX_PARENT, REX_SECOND_CHILD, REX_SESSION, useFakeRex } from "../support/rex.ts";
 import "../support/ambient-spawn-grant.ts";
 
 function launchFixture() {
@@ -72,8 +72,8 @@ describe("Rex interactive launch integration", () => {
 		disposeEnvCapsule(capsuleFrom(f.calls()).path);
 		const resumed = await resumeSubagentSession({ sessionFile: first.sessionFile, task: "Continue." }, resumeRuntime());
 		assert.equal(typeof resumed.disposeLaunchCapsule, "function");
-		assert.equal(resumed.surface, REX_CHILD);
-		assert.deepEqual(resumed.rexTarget, { sessionId: REX_SESSION, blockId: REX_CHILD, parentBlockId: REX_PARENT });
+		assert.equal(resumed.surface, REX_SECOND_CHILD);
+		assert.deepEqual(resumed.rexTarget, { sessionId: REX_SESSION, blockId: REX_SECOND_CHILD, parentBlockId: REX_PARENT });
 		const capsule = capsuleFrom(f.calls());
 		try {
 			const data = JSON.parse(readFileSync(capsule.path, "utf8"));
@@ -83,6 +83,21 @@ describe("Rex interactive launch integration", () => {
 		assert.equal(existsSync(capsule.path), false);
 		process.env.PI_SUBAGENT_MUX = "herdr";
 		await assert.rejects(resumeSubagentSession({ sessionFile: first.sessionFile }, resumeRuntime()), /Cannot resume rex child/);
+	});
+
+	it("applies and persists the agent's Rex placement over the parent default", async () => {
+		const f = launchFixture();
+		const definition = join(f.cwd, ".pi", "agents", "rex-worker.md");
+		writeFileSync(definition, readFileSync(definition, "utf8").replace("env: PI_SUBAGENT_HERDR_PLACEMENT=right-stack",
+			"env: PI_SUBAGENT_REX_PLACEMENT=tab"));
+		process.env.PI_SUBAGENT_REX_PLACEMENT = "down";
+		const running = await launchInteractiveSubagent(params, f.ctx, runtime);
+		const window = f.calls().find((call) => call[1] === "window");
+		assert.ok(window);
+		disposeEnvCapsule(window[window.indexOf("--") + 3]);
+		assert.equal(running.surface, REX_CHILD);
+		assert.ok(!f.calls().some((call) => call[1] === "split"));
+		assert.equal(readSubagentLaunchMetadataForTest(running.sessionFile)?.rexPlacementPolicy, "tab");
 	});
 
 	it("persists standalone ownership before launch and guards its resume backend", async () => {
@@ -164,7 +179,7 @@ describe("Rex interactive launch integration", () => {
 		assert.equal(typeof running.disposeLaunchCapsule, "function");
 		const capsule = capsuleFrom(f.calls());
 		try {
-			assert.deepEqual(running.rexTarget, { sessionId: REX_SESSION, blockId: REX_CHILD, parentBlockId: REX_PARENT });
+			assert.deepEqual(running.rexTarget, { sessionId: REX_SESSION, blockId: REX_SECOND_CHILD, parentBlockId: REX_PARENT });
 			const data = JSON.parse(readFileSync(capsule.path, "utf8"));
 			assert.equal(data.overrides.PI_SUBAGENT_INITIAL_TITLE, running.launchMetadata?.sessionTitle);
 			assert.equal(data.overrides.PI_SUBAGENT_TIMEOUT_WRAP_UP, "1");

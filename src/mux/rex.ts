@@ -1,5 +1,13 @@
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
+import {
+	planRexAutoPlacement,
+	type RexBlockGeometry,
+	type RexPlacementContext,
+	type RexPlacementPolicy,
+	resolveRexPlacementPolicy,
+	rexLayoutGeometry,
+} from "./rex-placement.ts";
 
 const execAsync = promisify(execFile);
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
@@ -77,29 +85,105 @@ function childTarget(surface: string, owned?: RexChildTarget): RexTarget {
 	return target;
 }
 
-/** Start the existing capsule runner directly. No shell input, startup delay, or focus transaction. */
-export function createRexCommandSurface(
-	name: string,
-	argv: string[],
-	cwd: string,
-	direction: "left" | "right" | "up" | "down" = "right",
-	fromSurface?: string,
-): string {
-	const caller = requireRexCaller();
-	const anchor = fromSurface ? { ...caller, blockId: fromSurface } : caller;
-	inspectRexBlock(anchor);
-	if (argv.length === 0) throw new Error("Rex child launch requires an explicit command");
-	const splitDirection = direction === "up" ? "above" : direction === "down" ? "below" : direction;
-	const args = scopedArgs(anchor, ["split", "-b", anchor.blockId, "--split", splitDirection,
+interface RexOwnedBlock {
+	blockId: string;
+	windowId: string;
+}
+
+interface RexPlacementGroup {
+	blocks: RexOwnedBlock[];
+	windows: number;
+}
+
+const placementGroups = new Map<string, RexPlacementGroup>();
+
+function placementGroupKey(caller: RexTarget, policy: RexPlacementPolicy): string {
+	const parentSession =
+		process.env.PI_SUBAGENT_SESSION ?? process.env.PI_SUBAGENT_PARENT_SESSION ?? `process:${process.pid}`;
+	return `${parentSession}\0${caller.sessionId}\0${caller.blockId}\0${policy}`;
+}
+
+/**
+ * Geometry only chooses placement; a failed lookup means "do not split", never "block is gone".
+ * Stderr is captured because a failure here is an expected answer, not a launch error.
+ */
+function rexSessionGeometry(caller: RexTarget): Map<string, RexBlockGeometry> {
+	const quiet = { ...OPTIONS, stdio: "pipe" as const };
+	try {
+		const session = JSON.parse(execFileSync("rex", ["--autostart=false", "session", "inspect", caller.sessionId, "--json"], quiet));
+		const size = JSON.parse(execFileSync("rex", scopedArgs(caller, ["block", "call", "-b", caller.blockId, "size"]), quiet));
+		return rexLayoutGeometry(session, caller, size);
+	} catch {
+		return new Map();
+	}
+}
+
+function splitRexBlock(caller: RexTarget, anchor: string, direction: "right" | "below", share: number,
+	name: string, argv: string[], cwd: string): string {
+	const args = scopedArgs(caller, ["split", "-b", anchor, "--split", direction, "--ratio", String(share),
 		"--focus=false", "--keep-open", "--shell=none", "--label", name, "-c", cwd, "--json"]);
 	const result = JSON.parse(execFileSync("rex", [...args, "--", ...argv], OPTIONS));
 	const surface = result?.block_ids?.[0];
-	if (!BLOCK.test(surface ?? "") || surface === anchor.blockId || result?.anchor_id !== anchor.blockId ||
+	if (!BLOCK.test(surface ?? "") || surface === anchor || surface === caller.blockId || result?.anchor_id !== anchor ||
 		(result.session_id !== undefined && result.session_id !== caller.sessionId)) {
 		// Never guess a target or retry a creation with an ambiguous result.
 		throw new Error("Rex split returned an invalid child/anchor identity; inspect Rex before retrying");
 	}
 	return surface;
+}
+
+function createRexWindowSurface(caller: RexTarget, title: string, name: string, argv: string[], cwd: string): RexOwnedBlock {
+	const args = scopedArgs(caller, ["window", "new", title, "--focus=false", "--keep-open", "--shell=none",
+		"-c", cwd, "--json"]);
+	const result = JSON.parse(execFileSync("rex", [...args, "--", ...argv], OPTIONS));
+	const surface = result?.block_ids?.[0];
+	if (!BLOCK.test(surface ?? "") || surface === caller.blockId || !WINDOW.test(result?.window_id ?? "") ||
+		(result.session_id !== undefined && result.session_id !== caller.sessionId)) {
+		throw new Error("Rex window returned an invalid child identity; inspect Rex before retrying");
+	}
+	try {
+		execFileSync("rex", [...scopedArgs(caller, ["block", "rename"]), "--", surface, name], OPTIONS);
+	} catch {
+		// The child is already running. A missing label is cosmetic; closing would kill the child.
+	}
+	return { blockId: surface, windowId: result.window_id };
+}
+
+/** Start the existing capsule runner directly. No shell input, startup delay, or focus transaction. */
+export function createRexCommandSurface(
+	name: string,
+	argv: string[],
+	cwd: string,
+	placement?: RexPlacementContext,
+): string {
+	const caller = requireRexCaller();
+	if (argv.length === 0) throw new Error("Rex child launch requires an explicit command");
+	const policy = resolveRexPlacementPolicy(placement?.policy ?? process.env.PI_SUBAGENT_REX_PLACEMENT);
+	if (policy === "tab") return createRexWindowSurface(caller, name, name, argv, cwd).blockId;
+	if (policy !== "auto") return splitRexBlock(caller, caller.blockId, policy === "down" ? "below" : "right", 50, name, argv, cwd);
+
+	const key = placementGroupKey(caller, policy);
+	const group = placementGroups.get(key);
+	const geometry = rexSessionGeometry(caller);
+	// A block the user moved to another window is theirs now; never split it again.
+	const owned = (group?.blocks ?? []).flatMap((block) => {
+		const live = geometry.get(block.blockId);
+		return live?.windowId === block.windowId ? [live] : [];
+	});
+	const parent = owned.length ? null : (geometry.get(caller.blockId) ?? null);
+	const plan = planRexAutoPlacement({ parent, owned });
+	// Window numbering restarts once every earlier child block is gone.
+	let windows = owned.length ? (group?.windows ?? 0) : 0;
+	let created: RexOwnedBlock;
+	const anchor = plan.kind === "split" ? [parent, ...owned].find((block) => block?.blockId === plan.anchor) : undefined;
+	if (plan.kind === "split" && anchor) {
+		created = { blockId: splitRexBlock(caller, anchor.blockId, plan.direction, plan.share, name, argv, cwd), windowId: anchor.windowId };
+	} else {
+		windows += 1;
+		created = createRexWindowSurface(caller, windows > 1 ? `Agents ${windows}` : "Agents", name, argv, cwd);
+	}
+	placementGroups.set(key, { blocks: [...owned, created].map(({ blockId, windowId }) => ({ blockId, windowId })), windows });
+	return created.blockId;
 }
 
 export function sendRexCommand(surface: string, command: string, owned?: RexChildTarget): void {

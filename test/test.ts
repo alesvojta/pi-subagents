@@ -46,6 +46,7 @@ import "./launch/runtime-preflight.test.ts";
 import "./launch/interactive-mode-policy.test.ts";
 import "./mux/rex-title-result.test.ts";
 import "./mux/rex.test.ts";
+import "./mux/rex-placement.test.ts";
 import "./launch/config.test.ts";
 import "./launch/skill-visibility.test.ts";
 import "./launch/resume-model-config.test.ts";

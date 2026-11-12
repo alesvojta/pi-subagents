@@ -20,6 +20,7 @@ export {
 	sendShellCommand,
 } from "./mux/io.ts";
 export { createRexCommandSurface, requireRexCaller, rexChildTarget, type RexChildTarget } from "./mux/rex.ts";
+export { resolveRexPlacementPolicy } from "./mux/rex-placement.ts";
 export { consumeSubagentExitSignal, pollForExit } from "./mux/poll.ts";
 export {
 	createSurface,

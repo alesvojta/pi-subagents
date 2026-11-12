@@ -1,5 +1,10 @@
 import { existsSync } from "node:fs";
-import { getMuxBackend, resolveHerdrPlacementPolicy, resolveZellijPlacementPolicy } from "../mux.ts";
+import {
+	getMuxBackend,
+	resolveHerdrPlacementPolicy,
+	resolveRexPlacementPolicy,
+	resolveZellijPlacementPolicy,
+} from "../mux.ts";
 import { ChildSessionStorage } from "../session/child-session-storage.ts";
 import { getEntryCount } from "../session/session.ts";
 import {
@@ -78,6 +83,10 @@ export async function coordinateSubagentLaunch(
 		options.mode === "interactive" && getMuxBackend() === "herdr"
 			? resolveHerdrPlacementPolicy(agentEnv.PI_SUBAGENT_HERDR_PLACEMENT ?? process.env.PI_SUBAGENT_HERDR_PLACEMENT)
 			: undefined;
+	const rexPlacementPolicy =
+		options.mode === "interactive" && getMuxBackend() === "rex"
+			? resolveRexPlacementPolicy(agentEnv.PI_SUBAGENT_REX_PLACEMENT ?? process.env.PI_SUBAGENT_REX_PLACEMENT)
+			: undefined;
 	const zellijPlacementPolicy =
 		options.mode === "interactive" && process.env.ZELLIJ_PANE_ID
 			? resolveZellijPlacementPolicy(agentEnv.PI_SUBAGENT_ZELLIJ_PLACEMENT ?? process.env.PI_SUBAGENT_ZELLIJ_PLACEMENT)
@@ -97,6 +106,7 @@ export async function coordinateSubagentLaunch(
 		systemPrompt?.text ?? (prepared.identityInSystemPrompt ? prepared.identity : options.systemPrompt),
 		{
 			...(herdrPlacementPolicy ? { herdrPlacementPolicy } : {}),
+			...(rexPlacementPolicy ? { rexPlacementPolicy } : {}),
 			...zellijPlacement,
 		},
 	);
