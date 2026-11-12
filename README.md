@@ -988,7 +988,7 @@ An agent can override the parent default through the [`env`](#agent-definitions)
 
 The child receives the existing parent-environment snapshot and its own Rex session/block identity. `PI_SUBAGENT_SURFACE` identifies the child block, not the parent's block. Rex does not require zsh; the existing Pi command or `PI_SUBAGENT_PI_COMMAND` wrapper remains in use. Native launches do not run interactive shell startup files.
 
-Rex uses `rex wait` to observe process exit, including terminals kept open after exit. Durable child completion and `caller_ping` signals take priority over process exit. The supervisor retains the child's owning session and block so it can clean up its own child after the parent block disappears. It never closes unrelated blocks.
+Rex observes process exit through one shared `rex events` subscription per Rex session (not one process per child), including terminals kept open after exit. A dropped stream is never treated as an exit: it reconnects with backoff and reads any missed exit from the block's `last_exit`. A closed child pane ends the wait as an error only on Rex's exact answer for that block. Durable child completion and `caller_ping` signals take priority over process exit. The supervisor retains the child's owning session and block so it can clean up its own child after the parent block disappears. It never closes unrelated blocks.
 
 Parent callbacks and automatic child cleanup apply to children launched by this extension. A manually opened root Pi window does not become a tracked child and stays open after its model turn. A child with `auto-exit: false` or operator takeover can also stay open. See [Child lifecycle](#child-lifecycle).
 

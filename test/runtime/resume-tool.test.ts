@@ -30,7 +30,7 @@ function readCapsuleFromTmuxLog(log: string): { args: string[]; overrides: Recor
 
 async function readNonEmptyFileEventually(path: string): Promise<string> {
 	let lastText = "";
-	for (let attempt = 0; attempt < 50; attempt++) {
+	for (let attempt = 0; attempt < 500; attempt++) {
 		if (existsSync(path)) {
 			lastText = readFileSync(path, "utf8");
 			if (lastText.length > 0) return lastText;

@@ -4,24 +4,10 @@ import { closeSurface, closeSurfaceAsync, readScreen, readScreenAsync, sendComma
 import { createSurface, createSurfaceSplit, renameCurrentTab, renameWorkspace } from "../../src/mux/surfaces.ts";
 import { createRexCommandSurface, waitForRexExit, rexChildTarget } from "../../src/mux/rex.ts";
 import { pollForExit } from "../../src/mux/poll.ts";
-import { readFileSync, existsSync } from "node:fs";
 import { REX_CHILD, REX_PARENT, REX_SESSION, useFakeRex } from "../support/rex.ts";
 
-const mutations = (calls: string[][]) => calls.filter((args) => !args.includes("inspect") && !args.includes("capture") && !args.includes("wait") &&
-	!(args.includes("call") && args.includes("size")));
-
-async function waitForPid(dir: string): Promise<void> {
-	for (let attempt = 0; attempt < 100; attempt++) {
-		if (existsSync(`${dir}/wait.pid`)) return;
-		await new Promise((resolve) => setTimeout(resolve, 10));
-	}
-	throw new Error("Fake Rex waiter did not start");
-}
-
-function assertWaiterReaped(dir: string): void {
-	const pid = Number(readFileSync(`${dir}/wait.pid`, "utf8"));
-	assert.throws(() => process.kill(pid, 0), (error: NodeJS.ErrnoException) => error.code === "ESRCH");
-}
+const mutations = (calls: string[][]) => calls.filter((args) => !args.includes("inspect") && !args.includes("capture") && !args.includes("events") &&
+	!(args.includes("call") && (args.includes("size") || args.includes("process"))));
 
 describe("native Rex backend", () => {
 	it("selects Rex with only Rex caller markers even when Herdr is executable", () => {
@@ -124,7 +110,7 @@ describe("native Rex backend", () => {
 	it("uses native exit status and preserves completion sidecar semantics", async () => {
 		const f = useFakeRex();
 		for (const exitCode of [0, 42]) {
-			f.setState({ exitCode });
+			f.setState({ lastExit: { [REX_CHILD]: { exit_code: exitCode } } });
 			assert.equal(await waitForRexExit(REX_CHILD, new AbortController().signal), exitCode);
 		}
 		f.setState({});
@@ -139,7 +125,7 @@ describe("native Rex backend", () => {
 	it("uses recorded child ownership after parent disappears without backend discovery", async () => {
 		const f = useFakeRex();
 		const owned = rexChildTarget({ sessionId: REX_SESSION, blockId: REX_PARENT }, REX_CHILD);
-		f.setState({ parentGone: true });
+		f.setState({ parentGone: true, lastExit: { [REX_CHILD]: { exit_code: 0 } } });
 		delete process.env.REX_SESSION;delete process.env.REX_BLOCK;
 		assert.match(readScreen(REX_CHILD, 50, owned), /line two/);
 		sendCommand(REX_CHILD, "message", owned);
@@ -148,59 +134,5 @@ describe("native Rex backend", () => {
 		assert.throws(() => closeSurface(REX_PARENT, owned), /match saved ownership/);
 		assert.throws(() => rexChildTarget({ sessionId: REX_SESSION, blockId: REX_PARENT }, REX_PARENT), /ownership/);
 		assert.ok(!f.calls().some((args) => args.includes(REX_PARENT)));
-	});
-
-	it("validates terminal wait payload and shell exit code", async () => {
-		const f = useFakeRex();
-		for (const state of [
-			{ waitPayload: { error: "API unavailable" }, waitCode: 1 },
-			{ waitPayload: { error: "API unavailable" }, waitCode: 0 },
-			{ waitPayload: { exit_code: "0" } }, { waitPayload: { exit_code: -1 } },
-			{ waitPayload: { exit_code: 42 }, waitCode: 0 }, { waitMalformed: true },
-		]) {
-			f.setState(state);
-			await assert.rejects(waitForRexExit(REX_CHILD, new AbortController().signal));
-		}
-		f.setState({ waitPayload: { exit_code: 42, error: "exit status 42" }, waitCode: 42 });
-		assert.equal(await waitForRexExit(REX_CHILD, new AbortController().signal), 42);
-		f.setState({ exitCode: 256 });
-		assert.equal(await waitForRexExit(REX_CHILD, new AbortController().signal), 0);
-	});
-
-	it("delivers ping while process is live and reaps even a SIGTERM-ignoring waiter", async () => {
-		const f = useFakeRex();f.setState({ waitHang: true, ignoreTerm: true });
-		const sessionFile = `${f.dir}/live.jsonl`;
-		const pending = pollForExit(REX_CHILD, new AbortController().signal, { interval: 10, sessionFile });
-		await waitForPid(f.dir);
-		writeFileSync(`${sessionFile}.exit`, JSON.stringify({ type: "ping", name: "worker", message: "Need decision now" }));
-		assert.equal((await pending).reason, "ping");
-		assertWaiterReaped(f.dir);
-		assert.ok(!f.calls().some((call) => call.includes("capture")));
-	});
-
-	it("completion sidecar wins over a failed waiter and abort reaps a live waiter", async () => {
-		const f = useFakeRex();f.setState({ waitError: true });
-		const sessionFile = `${f.dir}/done.jsonl`;
-		// CLI writes the durable outcome immediately before failing; the error handler must recheck it.
-		f.setState({ waitSidecar: `${sessionFile}.exit`, waitError: true });
-		assert.equal((await pollForExit(REX_CHILD, new AbortController().signal, { interval: 10_000, sessionFile })).reason, "done");
-		assert.ok(f.calls().some((call) => call.includes("wait")));
-		const aborted = useFakeRex();aborted.setState({ waitHang: true, ignoreTerm: true });
-		const controller = new AbortController();
-		const pending = pollForExit(REX_CHILD, controller.signal, { interval: 10 });
-		await waitForPid(aborted.dir);controller.abort();
-		await assert.rejects(pending, /Aborted/);
-		assertWaiterReaped(aborted.dir);
-	});
-
-	it("cancels native waiter without treating server failure as successful child exit", async () => {
-		const f = useFakeRex();f.setState({ waitHang: true });
-		const controller = new AbortController();
-		const pending = waitForRexExit(REX_CHILD, controller.signal);
-		setTimeout(() => controller.abort(), 50);
-		await assert.rejects(pending, /Aborted/);
-		f.setState({ waitError: true });
-		await assert.rejects(waitForRexExit(REX_CHILD, new AbortController().signal), /server disconnected/);
-		assert.deepEqual(mutations(f.calls()), []);
 	});
 });

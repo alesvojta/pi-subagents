@@ -1,4 +1,4 @@
-import { chmodSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createTestDir } from "./fixtures.ts";
 
@@ -51,6 +51,24 @@ if (op === 'block' && args[2] === 'inspect') {
  if (state.lookupFail || (state.parentGone && args[3] === ${JSON.stringify(REX_PARENT)})) process.exit(3);
  if (state.malformed) { console.log('not-json'); process.exit(0); }
  json({session_id:state.wrongSession ? 'other' : ${JSON.stringify(REX_SESSION)}, block:{block_id:state.wrongBlock ? 'other' : args[3], window_id:state.windows?.[args[3]] ?? ${JSON.stringify(REX_WINDOW)},label:state.label ?? 'Manual title'}});
+} else if (op === 'block' && args[2] === 'call' && args[5] === 'process') {
+ const block = args[4];
+ if (state.probeError) { console.error('Error: server disconnected'); process.exit(1); }
+ if (state.closedBlocks?.includes(block)) { console.error('Error: block target "' + block + '" not found'); process.exit(3); }
+ json({ last_exit: state.lastExit?.[block] ?? null });
+} else if (op === 'events') {
+ // Streams only lines appended to events.jsonl after it subscribed, like Rex.
+ if (state.sessionGone) { console.error('Error: subscribing to events: session target "' + args[3] + '" not found'); process.exit(3); }
+ if (state.eventsError) { console.error('Error: server disconnected'); process.exit(1); }
+ fs.writeFileSync(${JSON.stringify(join(dir, "events-pids"))}, process.pid + '\\n', { flag: 'a' });
+ if (state.ignoreTerm) process.on('SIGTERM', () => {});
+ const feed = ${JSON.stringify(join(dir, "events.jsonl"))};
+ let offset = fs.existsSync(feed) ? fs.statSync(feed).size : 0;
+ setInterval(() => {
+  if (!fs.existsSync(feed)) return;
+  const text = fs.readFileSync(feed, 'utf8');
+  if (text.length > offset) { process.stdout.write(text.slice(offset)); offset = text.length; }
+ }, 5);
 } else if (op === 'block' && args[2] === 'call' && args[5] === 'size') {
  if (state.sizeFail) process.exit(3);
  const [, , width, height] = rectOf(args[4]);
@@ -76,14 +94,6 @@ if (op === 'block' && args[2] === 'inspect') {
 } else if (op === 'capture') {
  if (state.captureFail) process.exit(3);
  setTimeout(() => console.log(state.screen ?? 'line one\\nline two'), state.captureDelay ?? 0);
-} else if (op === 'wait') {
- fs.writeFileSync(${JSON.stringify(join(dir, "wait.pid"))}, String(process.pid));
- if (state.waitSidecar) fs.writeFileSync(state.waitSidecar, JSON.stringify({type:'done',outputTokens:9}));
- if (state.waitHang) { if (state.ignoreTerm) process.on('SIGTERM',()=>{});setInterval(()=>{}, 1000); }
- else if (state.waitError) { console.error('server disconnected'); process.exit(1); }
- else if (state.waitMalformed) { console.log('broken json'); process.exit(0); }
- else if (state.waitPayload) {json(state.waitPayload);process.exit(state.waitCode ?? 0);}
- else {json({exit_code:state.exitCode || 0});process.exit((state.exitCode || 0) % 256);}
 } else if (op === 'send' || op === 'send-key' || (op === 'block' && ['rename','close'].includes(args[2]))) {
  if (state.controlFail) process.exit(3);
  if (args[2] === 'rename') {state.label=args.at(-1);fs.writeFileSync(${JSON.stringify(state)},JSON.stringify(state));}
@@ -100,7 +110,18 @@ if (op === 'block' && args[2] === 'inspect') {
 		delete process.env[key];
 	}
 	process.env.PATH = dir;
-	return { dir, state, calls: (): string[][] => readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)),
+	const eventsFeed = join(dir, "events.jsonl");
+	const blockEvent = (event: Record<string, unknown>) =>
+		appendFileSync(eventsFeed, `${JSON.stringify({ type: "session_event", payload: { session_id: REX_SESSION, event } })}\n`);
+	return { dir, state,
+		/** Every `rex events` process the fake started, in order. */
+		eventPids: (): number[] => existsSync(join(dir, "events-pids"))
+			? readFileSync(join(dir, "events-pids"), "utf8").trim().split("\n").filter(Boolean).map(Number) : [],
+		childExited: (block: string, exitCode: number) => blockEvent({ type: "block_event",
+			payload: { block_id: block, creator_name: "com.superlogical.terminal", name: "child_exited", payload: { exit_code: exitCode } } }),
+		blockClosed: (block: string) => blockEvent({ type: "block_closed", payload: { block_id: block } }),
+		rawEvent: (line: string) => appendFileSync(eventsFeed, `${line}\n`),
+		calls: (): string[][] => readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)),
 		setState: (value: Record<string, unknown>) => writeFileSync(state, JSON.stringify(value)),
 		/** Merges into the current state, keeping the blocks and windows the fake has created. */
 		updateState: (patch: (current: Record<string, Record<string, unknown> | undefined>) => Record<string, unknown>) => {

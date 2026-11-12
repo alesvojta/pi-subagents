@@ -1,5 +1,6 @@
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
+import { watchRexChildExit } from "./rex-events.ts";
 import {
 	planRexAutoPlacement,
 	type RexBlockGeometry,
@@ -208,40 +209,10 @@ export function closeRexSurface(surface: string, owned?: RexChildTarget): void {
 	execFileSync("rex", scopedArgs(target, ["block", "close", surface]), OPTIONS);
 }
 
-/** rex wait is event-driven and returns the terminal process exit status, including with --keep-open. */
+/** Event-driven: one shared `rex events` stream per session reports the exit, including with --keep-open. */
 export async function waitForRexExit(surface: string, signal: AbortSignal, owned?: RexChildTarget): Promise<number> {
 	const target = childTarget(surface, owned);
-	if (signal.aborted) throw new Error("Aborted while waiting for Rex child");
-	const pending = execAsync("rex", scopedArgs(target, ["wait", surface, "--json"]), {
-		encoding: "utf8", signal, maxBuffer: 1024 * 1024,
-	});
-	const closed = new Promise<void>((resolve) => pending.child.once("close", () => resolve()));
-	let killTimer: ReturnType<typeof setTimeout> | undefined;
-	const onAbort = () => { killTimer = setTimeout(() => pending.child.kill("SIGKILL"), 250); };
-	signal.addEventListener("abort", onAbort, { once: true });
-	if (signal.aborted) onAbort();
-	let stdout: string;
-	let code = 0;
-	try {
-		({ stdout } = await pending);
-	} catch (error) {
-		if (signal.aborted) throw new Error("Aborted while waiting for Rex child");
-		const failure = error as { code?: unknown; stdout?: string; stderr?: string };
-		if (typeof failure.code !== "number" || !failure.stdout?.trim()) throw error;
-		stdout = failure.stdout;
-		code = failure.code;
-	} finally {
-		// Abort settles execFile's promise before close. Wait for reaping, including a stubborn CLI.
-		await closed;
-		clearTimeout(killTimer);
-		signal.removeEventListener("abort", onAbort);
-	}
-	const payload = JSON.parse(stdout.trim());
-	// A terminal failure may include an `error` string alongside exit_code. API error envelopes do not.
-	if (!Number.isSafeInteger(payload?.exit_code) || payload.exit_code < 0 || payload.exit_code % 256 !== code) {
-		throw new Error("Rex wait did not report a valid matching terminal exit status");
-	}
-	return code;
+	return watchRexChildExit(target, signal);
 }
 
 const managedChildTitles = new Map<string, string>();

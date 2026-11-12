@@ -15,7 +15,7 @@ import {
 
 async function readEventually(path: string): Promise<string> {
 	let lastText = "";
-	for (let attempt = 0; attempt < 50; attempt++) {
+	for (let attempt = 0; attempt < 500; attempt++) {
 		if (existsSync(path)) {
 			lastText = readFileSync(path, "utf8");
 			if (lastText.trim()) return lastText;

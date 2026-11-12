@@ -12,6 +12,7 @@ if (process.env.PI_SUBAGENT_ALLOW_LIVE_WINDOWS !== "1") {
   process.exit(0);
 }
 const { createRexCommandSurface, closeRexSurface, rexChildTarget, waitForRexExit, readRexScreen, sendRexCommand, renameRexChild } = await import("../src/mux/rex.ts");
+const { liveRexEventStreams } = await import("../src/mux/rex-events.ts");
 const { getMuxBackend } = await import("../src/mux/core.ts");
 const { pollForExit } = await import("../src/mux/poll.ts");
 const { buildInteractiveShellCommand } = await import("../src/launch/shell-command.ts");
@@ -23,6 +24,12 @@ const rex = (...args) => execFileSync("rex", ["--autostart=false", ...args], { e
 const json = (...args) => JSON.parse(rex(...args));
 let session;
 let anchor;
+/** Counts real `rex events` processes for the smoke session, not just what the module believes. */
+const liveRexEventProcesses = () => {
+  try {
+    return execFileSync("pgrep", ["-f", `events -s ${session} --json`], { encoding: "utf8" }).trim().split("\n").length;
+  } catch { return 0; }
+};
 try {
   const created = json("new", `pi-rex-mux-smoke-${process.pid}`, "--window", "Smoke anchor", "-c", root,
     "--shell=none", "--json", "--", process.execPath, "-e", "setInterval(()=>{},1000)");
@@ -71,6 +78,25 @@ try {
   assert.equal(json("block", "call", "-s", session, "-b", running, "process").last_exit, null);
   close(running);
   console.log("PASS: waiter cancellation and ping before process exit");
+
+  // Several children share one subscription; a closed pane ends its wait without an exit status.
+  const shared = [0, 3, 5].map((status) =>
+    create([process.execPath, "-e", `setTimeout(()=>process.exit(${status}),800)`], `Shared ${status}`));
+  const sharedWaits = shared.map((block) => waitForRexExit(block, new AbortController().signal, children.get(block)));
+  assert.equal(liveRexEventStreams(), 1);
+  await delay(200);
+  assert.equal(liveRexEventProcesses(), 1, "one rex events process for three children");
+  assert.deepEqual(await Promise.all(sharedWaits), [0, 3, 5]);
+  assert.equal(liveRexEventProcesses(), 0);
+  for (const block of shared) close(block);
+  const doomed = create([process.execPath, "-e", "setInterval(()=>{},1000)"], "Closed pane");
+  const doomedWait = waitForRexExit(doomed, new AbortController().signal, children.get(doomed));
+  await delay(700);
+  rex("block", "close", "-s", session, doomed);
+  children.delete(doomed);
+  await assert.rejects(doomedWait, /closed before reporting an exit status/);
+  assert.equal(liveRexEventProcesses(), 0);
+  console.log("PASS: one shared rex events stream, exact closed-pane outcome, nothing left running");
 
   // Exercise private capsule argv and actual child identity hydration without a model.
   const childScript = join(root, "child-probe.mjs");

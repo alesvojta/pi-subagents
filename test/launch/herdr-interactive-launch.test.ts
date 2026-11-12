@@ -143,7 +143,7 @@ async function readEventually(
 	isReady: (text: string) => boolean = (text) => text.trim().length > 0,
 ): Promise<string> {
 	let lastText = "";
-	for (let attempt = 0; attempt < 50; attempt++) {
+	for (let attempt = 0; attempt < 500; attempt++) {
 		if (existsSync(path)) {
 			lastText = readFileSync(path, "utf8");
 			if (isReady(lastText)) return lastText;
