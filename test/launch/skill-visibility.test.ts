@@ -5,19 +5,9 @@ import {
 	describe,
 	getBaseSubagentEnvVarsForTest,
 	it,
-	join,
-	mkdirSync,
-	writeFileSync,
+	writeSkill,
 } from "../support/index.ts";
 import { getSkillVisibilitySpec } from "../../src/launch/skill-visibility.ts";
-
-function writeSkill(root: string, name: string, description = `${name} skill.`): string {
-	const skillDir = join(root, "skills", name);
-	mkdirSync(skillDir, { recursive: true });
-	const filePath = join(skillDir, "SKILL.md");
-	writeFileSync(filePath, `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}`);
-	return filePath;
-}
 
 describe("skill visibility annotations", () => {
 	it("parses =auto and =manual annotations while keeping plain names working", async () => {
@@ -47,6 +37,7 @@ describe("skill visibility annotations", () => {
 
 	it("keeps all and none free of annotations", async () => {
 		const dir = createTestDir();
+		writeSkill(dir, "tdd");
 		assert.equal((await buildSkillLaunchPlanForTest("all", undefined, dir, dir)).visibilitySpec, "");
 		assert.equal((await buildSkillLaunchPlanForTest(undefined, undefined, dir, dir)).visibilitySpec, "");
 		assert.equal((await buildSkillLaunchPlanForTest("none", undefined, dir, dir)).visibilitySpec, "");

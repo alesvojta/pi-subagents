@@ -22,6 +22,15 @@ import {
 	writeFileSync,
 } from "../support/index.ts";
 
+// The extension registers nothing without named agents, so registration tests
+// bring their own agent instead of relying on the developer's config.
+function useAgentRootWithWorker(): void {
+	const configDir = join(createTestDir(), "agent-root");
+	mkdirSync(join(configDir, "agents"), { recursive: true });
+	writeFileSync(join(configDir, "agents", "worker.md"), `---\nname: worker\ndescription: Do focused work\n---\n\nWorker body.`);
+	process.env.PI_CODING_AGENT_DIR = configDir;
+}
+
 describe("agent definitions and catalog", () => {
 	afterEach(() => {
 		resetSubagentStateForTest();
@@ -495,6 +504,7 @@ describe("agent definitions and catalog", () => {
 	});
 
 	it("registers conservative delegation guidance on the subagent tool", () => {
+		useAgentRootWithWorker();
 		const tools = new Map<string, any>();
 
 		subagentsExtension({
@@ -540,6 +550,7 @@ describe("agent definitions and catalog", () => {
 	});
 
 	it("registers opt-out delegation guidance when coordinator-only turn stop is disabled", () => {
+		useAgentRootWithWorker();
 		process.env.PI_SUBAGENT_DISABLE_COORDINATOR_ONLY_TURN = "1";
 		const tools = new Map<string, any>();
 
@@ -565,6 +576,7 @@ describe("agent definitions and catalog", () => {
 	});
 
 	it("tells a one-shot pi -p parent that every launch waits and returns the report inline", () => {
+		useAgentRootWithWorker();
 		const originalArgv = process.argv;
 		process.argv = ["node", "pi", "-p", "@task.md"];
 		const tools = new Map<string, any>();

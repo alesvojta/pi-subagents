@@ -14,6 +14,7 @@ import {
 	join,
 	readFileSync,
 	writeExecutable,
+	writeSkill,
 	writeSubagentLaunchMetadataEntryForTest,
 } from "../support/index.ts";
 import "../support/ambient-spawn-grant.ts";
@@ -28,6 +29,13 @@ async function readNonEmptyFileEventually(path: string): Promise<string> {
 		await new Promise((resolve) => setTimeout(resolve, 10));
 	}
 	throw new Error(`Timed out waiting for ${path}; last content: ${lastText}`);
+}
+
+function createSkillsDir(): string {
+	const dir = createTestDir();
+	writeSkill(dir, "context7");
+	writeSkill(dir, "tdd");
+	return dir;
 }
 
 function writeCapturePi(dir: string, envLog: string): string {
@@ -110,18 +118,18 @@ describe("skill visibility env on resume and timeout wrap-up", () => {
 	});
 
 	it("resumes with the persisted annotation spec in the child env", async () => {
-		const dir = createTestDir();
+		const dir = createSkillsDir();
 		assert.equal(await resumeAndCapture(dir, "context7=auto, tdd"), "V=context7=auto");
 	});
 
 	it("clears an inherited visibility value when the persisted skills have no annotations", async () => {
-		const dir = createTestDir();
+		const dir = createSkillsDir();
 		process.env.PI_SUBAGENT_SKILL_VISIBILITY = "context7=auto";
 		assert.match(await resumeAndCapture(dir, "tdd"), /^V=(|UNSET)$/);
 	});
 
 	it("restarts timeout wrap-up with the original annotation spec, and clears it without one", async () => {
-		const dir = createTestDir();
+		const dir = createSkillsDir();
 		for (const skills of ["context7=auto, tdd", "tdd"]) {
 			const envLog = join(dir, `wrapup-${Math.random().toString(36).slice(2)}.log`);
 			process.env.PI_SUBAGENT_PI_COMMAND = writeCapturePi(dir, envLog);

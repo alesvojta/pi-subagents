@@ -1,10 +1,22 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { getEntries } from "../../src/session/session.ts";
 
+// Resolved so paths match what child processes report on hosts where the
+// tmpdir is a symlink (macOS /var -> /private/var).
 export function createTestDir(): string {
-	return mkdtempSync(join(tmpdir(), "subagents-test-"));
+	return realpathSync(mkdtempSync(join(tmpdir(), "subagents-test-")));
+}
+
+// Writes a minimal skill under ROOT/skills so tests never depend on the skills
+// installed on the developer's machine.
+export function writeSkill(root: string, name: string, description = `${name} skill.`): string {
+	const skillDir = join(root, "skills", name);
+	mkdirSync(skillDir, { recursive: true });
+	const filePath = join(skillDir, "SKILL.md");
+	writeFileSync(filePath, `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}`);
+	return filePath;
 }
 
 export function createSessionFile(dir: string, entries: object[]): string {
