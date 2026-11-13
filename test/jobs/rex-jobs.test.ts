@@ -1,13 +1,14 @@
-import { readFileSync } from "node:fs";
-import { type JobResult, jobPaths, writeJsonAtomic } from "../../src/jobs/job-files.ts";
+import { readFileSync, writeFileSync } from "node:fs";
+import { getSessionJobsDir, type JobResult, jobPaths, writeJsonAtomic } from "../../src/jobs/job-files.ts";
 import { formatJobResult, getJobRunnerPath, type LaunchedJob, launchRexJob, watchRexJob } from "../../src/jobs/job-launch.ts";
 import { registerJobTools } from "../../src/tools/job-tools.ts";
 import { assert, createTestDir, describe, it } from "../support/index.ts";
+import { until } from "../support/jobs.ts";
 import { REX_PARENT, REX_SESSION, useFakeRex } from "../support/rex.ts";
 
 function launch(command = "make test", name?: string): LaunchedJob {
 	process.env.PI_ARTIFACT_PROJECT_ROOT = createTestDir();
-	return launchRexJob({ command, cwd: createTestDir(), sessionId: "parent-session", name });
+	return launchRexJob({ command, cwd: createTestDir(), jobsDir: getSessionJobsDir(createTestDir(), "parent-session"), name });
 }
 
 function writeResult(job: LaunchedJob, patch: Partial<JobResult> = {}): JobResult {
@@ -24,14 +25,6 @@ function writeResult(job: LaunchedJob, patch: Partial<JobResult> = {}): JobResul
 	};
 	writeJsonAtomic(jobPaths(job.dir).result, result);
 	return result;
-}
-
-async function until(condition: () => boolean, what: string): Promise<void> {
-	for (let i = 0; i < 300; i++) {
-		if (condition()) return;
-		await new Promise((resolve) => setTimeout(resolve, 10));
-	}
-	throw new Error(`Timed out waiting for ${what}`);
 }
 
 interface FakeTool {
@@ -69,9 +62,13 @@ describe("Rex background jobs", () => {
 		assert.match(listed.promptSnippet ?? "", /background job/);
 		assert.match(listed.promptGuidelines?.join("\n") ?? "", /prefer rex_job_run over a blocking shell call/);
 		assert.ok(inside.commands.has("job"));
+		assert.ok(inside.commands.has("jobs"));
+		for (const name of ["rex_job_list", "rex_job_log", "rex_job_stop"]) assert.ok(inside.tools.has(name), name);
 		const denied = fakePi();
-		registerJobTools(denied.pi, (name) => name !== "rex_job_run");
+		registerJobTools(denied.pi, (name) => name !== "rex_job_run" && name !== "rex_job_stop");
 		assert.equal(denied.tools.has("rex_job_run"), false);
+		assert.equal(denied.tools.has("rex_job_stop"), false);
+		assert.ok(denied.tools.has("rex_job_list"));
 
 		delete process.env.REX_SESSION;
 		delete process.env.REX_BLOCK;
@@ -183,5 +180,49 @@ describe("Rex background jobs", () => {
 		assert.equal(messages[0].message.customType, "rex_job_result");
 		assert.deepEqual(messages[0].options, { triggerTurn: true, deliverAs: "steer" });
 		assert.equal(messages[0].message.details.status, "completed");
+	});
+
+	it("lists, reads, and stops jobs only within the calling session", async () => {
+		useFakeRex();
+		process.env.PI_ARTIFACT_PROJECT_ROOT = createTestDir();
+		const { pi, tools, commands } = fakePi();
+		registerJobTools(pi, () => true);
+		const cwd = createTestDir();
+		const mine = { cwd, sessionManager: { getSessionId: () => "parent-session" } };
+		const other = { cwd, sessionManager: { getSessionId: () => "other-session" } };
+		const run = tools.get("rex_job_run");
+		const launched = await run?.execute("call-1", { command: "echo hi" }, undefined, undefined, mine);
+		const id = launched?.details.id as string;
+		const dir = launched?.details.log.replace(/\/output\.log$/, "") as string;
+		writeFileSync(jobPaths(dir).log, "hi\n");
+		writeJsonAtomic(jobPaths(dir).result, {
+			version: 1, id, status: "completed", exitCode: 0, signal: null, durationMs: 5, tail: "hi", finishedAt: new Date().toISOString(),
+		});
+
+		const listed = await tools.get("rex_job_list")?.execute("call-2", {}, undefined, undefined, mine);
+		assert.match(listed?.content[0].text ?? "", new RegExp(`${id} {2}completed exit 0`));
+		const log = await tools.get("rex_job_log")?.execute("call-3", { id, tail: 5 }, undefined, undefined, mine);
+		assert.match(log?.content[0].text ?? "", /lines 1-1 of 1[\s\S]*\nhi$/);
+		const stop = await tools.get("rex_job_stop")?.execute("call-4", { id }, undefined, undefined, mine);
+		assert.match(stop?.content[0].text ?? "", /already ended \(completed\); nothing to stop/);
+
+		assert.match((await tools.get("rex_job_list")?.execute("call-5", {}, undefined, undefined, other))?.content[0].text ?? "", /No background jobs/);
+		for (const name of ["rex_job_log", "rex_job_stop"]) {
+			const denied = (await tools.get(name)?.execute("call-6", { id }, undefined, undefined, other)) as unknown as { isError?: boolean; content: { text: string }[] };
+			assert.equal(denied.isError, true);
+			assert.match(denied.content[0].text, new RegExp(`No background job ${id} in this session`));
+		}
+
+		const notes: [string, string][] = [];
+		const ui = { ...mine, ui: { notify: (text: string, level: string) => notes.push([text, level]) } };
+		const jobs = commands.get("jobs") as { handler: (args: string, ctx: unknown) => Promise<void> };
+		await jobs.handler("", ui);
+		await jobs.handler(`log ${id} 3`, ui);
+		await jobs.handler("stop ../other-session", ui);
+		await jobs.handler("kill everything", ui);
+		assert.match(notes[0][0], new RegExp(id));
+		assert.match(notes[1][0], /\nhi$/);
+		assert.deepEqual(notes[2], ["No background job ../other-session in this session", "error"]);
+		assert.equal(notes[3][1], "warning");
 	});
 });

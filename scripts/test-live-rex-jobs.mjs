@@ -14,7 +14,8 @@ if (process.env.PI_SUBAGENT_ALLOW_LIVE_WINDOWS !== "1") {
 const root = realpathSync(mkdtempSync(join(tmpdir(), "pi-rex-jobs-smoke-")));
 process.env.PI_ARTIFACT_PROJECT_ROOT = join(root, "artifacts");
 const { launchRexJob, watchRexJob } = await import("../src/jobs/job-launch.ts");
-const { jobPaths } = await import("../src/jobs/job-files.ts");
+const { getSessionJobsDir, jobPaths } = await import("../src/jobs/job-files.ts");
+const { listJobs, readJobLog, stopJob } = await import("../src/jobs/job-control.ts");
 const rex = (...args) => execFileSync("rex", ["--autostart=false", ...args], { encoding: "utf8", timeout: 15_000 });
 const json = (...args) => JSON.parse(rex(...args));
 const isAlive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -35,8 +36,9 @@ try {
   process.env.REX_SESSION = session;
   process.env.REX_BLOCK = created.initial_windows[0].block_ids[0];
 
+  const jobsDir = getSessionJobsDir(root, "smoke-session");
   const run = async (command) => {
-    const job = launchRexJob({ command, cwd: root, sessionId: "smoke-session" });
+    const job = launchRexJob({ command, cwd: root, jobsDir });
     const deliveries = [];
     const result = await watchRexJob(job, (_job, value) => deliveries.push(value));
     return { job, result, deliveries };
@@ -63,7 +65,7 @@ try {
 
   // Closing the pane stops the whole process group, including grandchildren.
   const pidFile = join(root, "grandchild.pid");
-  const job = launchRexJob({ command: `sleep 300 & echo $! > '${pidFile}'; wait`, cwd: root, sessionId: "smoke-session" });
+  const job = launchRexJob({ command: `sleep 300 & echo $! > '${pidFile}'; wait`, cwd: root, jobsDir });
   const deliveries = [];
   const watching = watchRexJob(job, (_job, value) => deliveries.push(value));
   for (let i = 0; i < 100 && !existsSync(pidFile); i++) await delay(50);
@@ -79,6 +81,34 @@ try {
   for (let i = 0; i < 60 && isAlive(grandchild); i++) await delay(50);
   assert.equal(isAlive(grandchild), false, "grandchild in the job's process group is gone");
   console.log("PASS: closing the pane interrupts the job, kills its process group, delivers once");
+
+  // Stopping a long command stops its process group and delivers "interrupted" once, watched or not.
+  for (const watched of [true, false]) {
+    const stopPid = join(root, `stop-grandchild-${watched}.pid`);
+    const long = launchRexJob({ command: `echo working; sleep 300 & echo $! > '${stopPid}'; wait`, cwd: root, jobsDir });
+    const stopDeliveries = [];
+    const deliver = (_job, value) => stopDeliveries.push(value);
+    const watcher = watched ? watchRexJob(long, deliver) : null;
+    for (let i = 0; i < 100 && !existsSync(stopPid); i++) await delay(50);
+    const sleeper = Number(readFileSync(stopPid, "utf8"));
+    assert.equal(listJobs(jobsDir).find((j) => j.spec.id === long.spec.id)?.state, "running");
+    assert.match((await readJobLog(long.dir, { tail: 5 })).text, /working/);
+    const outcome = await stopJob(long.dir, deliver);
+    assert.equal(outcome.kind, "stopped");
+    for (let i = 0; i < 60 && isAlive(sleeper); i++) await delay(50);
+    assert.equal(isAlive(sleeper), false, "the stopped job's process group is gone");
+    for (let i = 0; i < 100 && stopDeliveries.length === 0; i++) await delay(50);
+    await watcher;
+    await delay(500);
+    assert.equal(stopDeliveries.length, 1);
+    assert.equal(stopDeliveries[0].status, "interrupted");
+    assert.equal(stopDeliveries[0].signal, "SIGTERM");
+    assert.equal(listJobs(jobsDir).find((j) => j.spec.id === long.spec.id)?.state, "interrupted");
+    assert.equal((await stopJob(long.dir, deliver)).kind, "finished");
+    await delay(300);
+    assert.equal(blockExists(long.blockId), false, "the stopped job's pane closes after delivery");
+    console.log(`PASS: stopping a ${watched ? "watched" : "no longer watched"} job kills its process group and delivers interrupted once`);
+  }
 
   // A second watcher of a delivered job never delivers again.
   assert.equal(await watchRexJob(ok.job, () => assert.fail("delivered twice")), null);

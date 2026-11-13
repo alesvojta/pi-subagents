@@ -1,10 +1,13 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { getSessionArtifactDir } from "../artifact-storage.ts";
 
 /**
  * On-disk contract between the parent and the runner inside a job's Rex pane.
  * The runner only reads `job.json` and writes `output.log` and `result.json`;
  * the parent alone claims `delivered.json`, which makes delivery exactly-once.
+ * The runner also records its pid in `runner.json` so the parent can stop it;
+ * the parent records the job's pane in `pane.json` and a stop in `stop.json`.
  */
 
 export interface JobSpec {
@@ -33,6 +36,14 @@ export interface JobResult {
 	finishedAt: string;
 }
 
+/** Process identity of the runner, written once the command is spawned. */
+export interface JobRunnerInfo {
+	pid: number;
+	/** Process group of the command; equals the command's pid. */
+	pgid: number | null;
+	startedAt: string;
+}
+
 export const JOB_TAIL_MAX_LINES = 40;
 const JOB_TAIL_MAX_CHARS = 4000;
 
@@ -42,7 +53,21 @@ export function jobPaths(dir: string) {
 		log: join(dir, "output.log"),
 		result: join(dir, "result.json"),
 		delivered: join(dir, "delivered.json"),
+		runner: join(dir, "runner.json"),
+		pane: join(dir, "pane.json"),
+		stop: join(dir, "stop.json"),
 	};
+}
+
+const JOB_ID = /^job-[0-9a-f]{8}$/;
+
+export function isJobId(id: string): boolean {
+	return JOB_ID.test(id);
+}
+
+/** Every job of one parent session lives here, whatever the job's own cwd. */
+export function getSessionJobsDir(sessionCwd: string, sessionId: string): string {
+	return join(getSessionArtifactDir(sessionCwd, sessionId), "jobs");
 }
 
 export function writeJsonAtomic(path: string, value: unknown): void {
@@ -63,6 +88,15 @@ export function readJobResult(dir: string): JobResult | null {
 	try {
 		const result = JSON.parse(readFileSync(jobPaths(dir).result, "utf8"));
 		return result?.version === 1 && typeof result.status === "string" ? result : null;
+	} catch {
+		return null;
+	}
+}
+
+export function readJobRunner(dir: string): JobRunnerInfo | null {
+	try {
+		const runner = JSON.parse(readFileSync(jobPaths(dir).runner, "utf8"));
+		return Number.isInteger(runner?.pid) && runner.pid > 0 ? runner : null;
 	} catch {
 		return null;
 	}

@@ -12,7 +12,8 @@ import { boundedTail, type JobResult, type JobStatus, jobPaths, readJobSpec, wri
  * Runs the command in its own process group, streams its output to the pane
  * and to `output.log` with backpressure, and writes `result.json` before it
  * exits with the command's status. A signal to the runner (closing the pane
- * sends SIGHUP) stops the whole group and is recorded as an interruption.
+ * sends SIGHUP, a parent stop sends SIGTERM) stops the whole group and is
+ * recorded as an interruption.
  */
 
 const KILL_GRACE_MS = 2000;
@@ -72,6 +73,8 @@ const child = spawn("/bin/sh", ["-c", job.command], {
 	stdio: ["ignore", "pipe", "pipe"],
 	env: { ...process.env, ...(job.path ? { PATH: job.path } : {}) },
 });
+
+if (child.pid) writeJsonAtomic(paths.runner, { pid: process.pid, pgid: child.pid, startedAt: new Date(startedAt).toISOString() });
 
 let interrupted: NodeJS.Signals | null = null;
 let escalation: ReturnType<typeof setTimeout> | undefined;

@@ -1,12 +1,20 @@
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getSessionArtifactDir } from "../artifact-storage.ts";
 import { closeRexSurface, createRexCommandSurface, type RexChildTarget, requireRexCaller, rexChildTarget, waitForRexExit } from "../mux/rex.ts";
 import { RexChildGoneError } from "../mux/rex-events.ts";
 import { resolveSupervisorRuntime } from "../vf/supervisor/spawn.ts";
-import { claimJobDelivery, type JobResult, type JobSpec, jobPaths, readJobResult, readLogTail, writeJsonAtomic } from "./job-files.ts";
+import {
+	claimJobDelivery,
+	type JobResult,
+	type JobSpec,
+	jobPaths,
+	readJobResult,
+	readJobSpec,
+	readLogTail,
+	writeJsonAtomic,
+} from "./job-files.ts";
 
 /**
  * Launches shell jobs into the parent's own `Jobs` Rex window and delivers
@@ -24,7 +32,8 @@ export interface LaunchedJob {
 export interface JobLaunchRequest {
 	command: string;
 	cwd: string;
-	sessionId: string;
+	/** The parent session's jobs directory (see `getSessionJobsDir`). */
+	jobsDir: string;
 	name?: string;
 }
 
@@ -43,7 +52,7 @@ export function launchRexJob(request: JobLaunchRequest): LaunchedJob {
 	if (!existsSync(request.cwd)) throw new Error(`Job cwd does not exist: ${request.cwd}`);
 	const caller = requireRexCaller();
 	const id = `job-${randomBytes(4).toString("hex")}`;
-	const dir = resolve(getSessionArtifactDir(request.cwd, request.sessionId), "jobs", id);
+	const dir = resolve(request.jobsDir, id);
 	mkdirSync(dir, { recursive: true, mode: 0o700 });
 	const name = request.name?.trim() || command.split("\n")[0].slice(0, 48);
 	const spec: JobSpec = {
@@ -62,7 +71,25 @@ export function launchRexJob(request: JobLaunchRequest): LaunchedJob {
 		windowTitle: "Jobs",
 		ownWindow: true,
 	});
-	return { spec, dir, blockId, target: rexChildTarget(caller, blockId) };
+	const target = rexChildTarget(caller, blockId);
+	writeJsonAtomic(jobPaths(dir).pane, { blockId, target });
+	return { spec, dir, blockId, target };
+}
+
+/** Rebuild a launched job from its directory; null when its pane was never recorded. */
+export function loadLaunchedJob(dir: string): LaunchedJob | null {
+	try {
+		const spec = readJobSpec(dir);
+		const pane = JSON.parse(readFileSync(jobPaths(dir).pane, "utf8"));
+		const target = rexChildTarget({ sessionId: pane.target.sessionId, blockId: pane.target.parentBlockId }, pane.blockId);
+		return { spec, dir, blockId: target.blockId, target };
+	} catch {
+		return null;
+	}
+}
+
+export function isJobWatched(id: string): boolean {
+	return liveJobs.has(id);
 }
 
 function isBlockNotFound(error: unknown, blockId: string): boolean {
@@ -155,6 +182,7 @@ export function formatJobResult(job: LaunchedJob, result: JobResult): string {
 		`Cwd: ${job.spec.cwd}`,
 		`Full log: ${jobPaths(job.dir).log}`,
 	];
+	if (existsSync(jobPaths(job.dir).stop)) lines.push("Note: stopped on request.");
 	if (result.error) lines.push(`Note: ${result.error}`);
 	lines.push(result.tail ? `Output (last lines):\n${result.tail}` : "Output: (none)");
 	return lines.join("\n");

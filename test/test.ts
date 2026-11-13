@@ -47,6 +47,7 @@ import "./launch/interactive-mode-policy.test.ts";
 import "./mux/rex-title-result.test.ts";
 import "./mux/rex.test.ts";
 import "./mux/rex-events.test.ts";
+import "./jobs/job-control.test.ts";
 import "./jobs/job-runner.test.ts";
 import "./jobs/rex-jobs.test.ts";
 import "./mux/rex-placement.test.ts";

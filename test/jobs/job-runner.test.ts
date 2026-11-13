@@ -1,9 +1,8 @@
-import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { JOB_TAIL_MAX_LINES, type JobSpec, jobPaths, readJobResult, writeJsonAtomic } from "../../src/jobs/job-files.ts";
-import { getJobRunnerPath } from "../../src/jobs/job-launch.ts";
 import { assert, createTestDir, describe, it } from "../support/index.ts";
+import { isAlive, startRunner } from "../support/jobs.ts";
 
 function writeJob(command: string): string {
 	const dir = join(createTestDir(), "job");
@@ -11,25 +10,6 @@ function writeJob(command: string): string {
 	const spec: JobSpec = { version: 1, id: "job-test", name: "test", command, cwd: dir, createdAt: new Date().toISOString() };
 	writeJsonAtomic(jobPaths(dir).spec, spec);
 	return dir;
-}
-
-function startRunner(dir: string) {
-	const child = spawn(process.execPath, [getJobRunnerPath(), dir], { stdio: ["ignore", "pipe", "pipe"] });
-	let screen = "";
-	child.stdout.on("data", (chunk) => {
-		screen += chunk;
-	});
-	const exited = new Promise<number | null>((resolve) => child.once("close", (code) => resolve(code)));
-	return { child, exited, screen: () => screen };
-}
-
-function isAlive(pid: number): boolean {
-	try {
-		process.kill(pid, 0);
-		return true;
-	} catch {
-		return false;
-	}
 }
 
 describe("background job runner", () => {
