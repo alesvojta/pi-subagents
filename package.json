@@ -9,7 +9,7 @@
 	"author": "edxeth",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/sevaiam/pi-subagents"
+		"url": "https://github.com/alesvojta/pi-subagents"
 	},
 	"type": "module",
 	"scripts": {

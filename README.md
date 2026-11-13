@@ -8,30 +8,17 @@ Use it when one agent should hand work to another agent instead of trying to do 
 
 https://github.com/user-attachments/assets/e0b97493-6c9b-4710-ba26-a6c08230ba28
 
-## Acknowledgements
-
-Special thanks to [@FasalZein](https://github.com/FasalZein) and [@isthatyousaf](https://github.com/isthatyousaf) — for their contributions, ideas, and for providing access to frontier models like GPT and Claude, which made it possible to experiment and build this extension. Good guys, I owe them a lot!
-
-## 🌐 **Join the Community**
-
-> [!NOTE]
-> **Building with AI doesn’t have to be a solo grind.**  
-> Join our Discord community to meet other people exploring the latest models, tools, workflows, and ideas: **https://discord.gg/whhrDtCrSS**
->
-> We talk about what’s new, what’s useful, and what’s actually worth paying attention to in AI.  
-> *And if you want more than conversation,* members also get access to **heavily discounted AI products and services** — including deals on tools like **ChatGPT Plus** and more for just a few dollars.
-
 ## Install
 
-The fork's `main` branch includes the Rex backend and launcher fixes on top of upstream `edxeth/pi-subagents`.
+This fork's `main` branch builds on upstream `edxeth/pi-subagents`. It adds the native Rex backend from `sevaiam/pi-subagents` and further Rex features: one shared `rex events` stream for all children, reattaching Rex children after a reload or restart, Rex background shell jobs, and Rex child status.
 
 ```bash
-pi install git:github.com/sevaiam/pi-subagents@main
+pi install git:github.com/alesvojta/pi-subagents@main
 ```
 
-For future upstream updates, merge `upstream/main` into the fork's `main` branch. Do not reset the fork to upstream, because that would remove the Rex changes.
+For future upstream updates, merge `upstream/main` (`edxeth/pi-subagents`) into the fork's `main` branch. Do not reset the fork to upstream, because that would remove the Rex changes.
 
-If upstream `edxeth/pi-subagents` is already configured, replace that package declaration instead of loading both packages. They register the same tool names. Restart Pi after changing the launcher package.
+If `edxeth/pi-subagents` or `sevaiam/pi-subagents` is already configured, replace that package declaration instead of loading both packages. They register the same tool names. Restart Pi after changing the launcher package.
 
 ## The model
 
@@ -1166,9 +1153,9 @@ Herdr validation record for this release:
 - `npm test` runs the registered Herdr mux and launch suites through the repository test entrypoint.
 - `npm run test:live-herdr-mux` and `npm run test:live-herdr-pi` pass their skip guards when `PI_SUBAGENT_ALLOW_LIVE_WINDOWS` and `PI_SUBAGENT_LIVE_MODEL` are unset. A real live run requires the opt-in variables above.
 
-### Fork validation record
+### Rex backend validation record
 
-The development checks used upstream commit `cf6dbf4` as the comparison baseline.
+This record comes from the `sevaiam/pi-subagents` fork that introduced the Rex backend. The development checks used upstream commit `cf6dbf4` as the comparison baseline.
 
 - Type checking and file-size checks passed.
 - Eight real interactive parent/child cases passed: Sol, Astra, Fable, and Opus in both Rex and Herdr. These are user-configured model aliases, not required provider IDs.
@@ -1182,7 +1169,9 @@ The development checks used upstream commit `cf6dbf4` as the comparison baseline
 
 - upstream foundation: [HazAT/pi-interactive-subagents](https://github.com/HazAT/pi-interactive-subagents)
 - orchestration foundation: [edxeth/pi-subagents](https://github.com/edxeth/pi-subagents)
-- this fork: [sevaiam/pi-subagents](https://github.com/sevaiam/pi-subagents)
+- native Rex backend: [sevaiam/pi-subagents](https://github.com/sevaiam/pi-subagents)
+- this fork: [alesvojta/pi-subagents](https://github.com/alesvojta/pi-subagents)
+- Rex event stream, reattach, background jobs, and child status ideas: [xiangsam/pi-rex-adapter](https://github.com/xiangsam/pi-rex-adapter)
 - Rex integration reference: [elucid/pi-rex-subagents](https://github.com/elucid/pi-rex-subagents). This backend uses the installed Rex CLI contract and keeps the existing orchestration implementation.
 
 ## License
