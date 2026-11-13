@@ -98,10 +98,10 @@ interface RexPlacementGroup {
 
 const placementGroups = new Map<string, RexPlacementGroup>();
 
-function placementGroupKey(caller: RexTarget, policy: RexPlacementPolicy): string {
+function placementGroupKey(caller: RexTarget, policy: RexPlacementPolicy, windowTitle: string): string {
 	const parentSession =
 		process.env.PI_SUBAGENT_SESSION ?? process.env.PI_SUBAGENT_PARENT_SESSION ?? `process:${process.pid}`;
-	return `${parentSession}\0${caller.sessionId}\0${caller.blockId}\0${policy}`;
+	return `${parentSession}\0${caller.sessionId}\0${caller.blockId}\0${policy}\0${windowTitle}`;
 }
 
 /**
@@ -163,7 +163,8 @@ export function createRexCommandSurface(
 	if (policy === "tab") return createRexWindowSurface(caller, name, name, argv, cwd).blockId;
 	if (policy !== "auto") return splitRexBlock(caller, caller.blockId, policy === "down" ? "below" : "right", 50, name, argv, cwd);
 
-	const key = placementGroupKey(caller, policy);
+	const windowTitle = placement?.windowTitle ?? "Agents";
+	const key = placementGroupKey(caller, policy, windowTitle);
 	const group = placementGroups.get(key);
 	const geometry = rexSessionGeometry(caller);
 	// A block the user moved to another window is theirs now; never split it again.
@@ -171,7 +172,7 @@ export function createRexCommandSurface(
 		const live = geometry.get(block.blockId);
 		return live?.windowId === block.windowId ? [live] : [];
 	});
-	const parent = owned.length ? null : (geometry.get(caller.blockId) ?? null);
+	const parent = owned.length || placement?.ownWindow ? null : (geometry.get(caller.blockId) ?? null);
 	const plan = planRexAutoPlacement({ parent, owned });
 	// Window numbering restarts once every earlier child block is gone.
 	let windows = owned.length ? (group?.windows ?? 0) : 0;
@@ -181,7 +182,7 @@ export function createRexCommandSurface(
 		created = { blockId: splitRexBlock(caller, anchor.blockId, plan.direction, plan.share, name, argv, cwd), windowId: anchor.windowId };
 	} else {
 		windows += 1;
-		created = createRexWindowSurface(caller, windows > 1 ? `Agents ${windows}` : "Agents", name, argv, cwd);
+		created = createRexWindowSurface(caller, windows > 1 ? `${windowTitle} ${windows}` : windowTitle, name, argv, cwd);
 	}
 	placementGroups.set(key, { blocks: [...owned, created].map(({ blockId, windowId }) => ({ blockId, windowId })), windows });
 	return created.blockId;

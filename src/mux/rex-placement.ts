@@ -2,6 +2,10 @@ export type RexPlacementPolicy = "auto" | "right" | "down" | "tab";
 
 export interface RexPlacementContext {
 	policy?: RexPlacementPolicy;
+	/** Title of the windows this group opens; defaults to "Agents". */
+	windowTitle?: string;
+	/** Never split the caller's block: the group lives only in its own windows. */
+	ownWindow?: boolean;
 }
 
 export interface RexBlockGeometry {

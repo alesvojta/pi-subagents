@@ -996,6 +996,17 @@ Recorded Rex children can resume only in their original Rex project session. Res
 
 The optional `set_tab_title` tool names only the child block. It does not rename a shared Rex window or project session. It reports `Title unchanged` when a manual title or ownership check prevents a rename. Existing model/title extensions remain responsible for their model-tag and task-title policy.
 
+### Rex background shell jobs
+
+Inside Rex, the parent can run long shell commands (builds, test suites, servers) without blocking its turn. Outside Rex, neither the tool nor the command is registered. Unlike subagents, jobs do not need any named agent.
+
+- The model uses the `rex_job_run` tool (`command`, optional `cwd` and `name`). It returns immediately with the job ID, pane, and log path.
+- The user types `/job <shell command>`.
+
+Each job runs with `/bin/sh -c` in its own process group, inside a pane in the parent's own `Jobs` window. Jobs never split the parent's pane. Later jobs stack inside the `Jobs` window by the same geometry rules as subagents (`Jobs 2` and so on when the window is full). The pane first shows the command and working directory, then streams the output, and ends with a summary (status, exit code, duration). The full output goes to `output.log` in the session's artifact directory (`.../artifacts/<session-id>/jobs/<job-id>/`).
+
+When the job ends, the parent receives one `rex_job_result` message with the status (`completed`, `failed`, or `interrupted`), the exit code, the last 40 output lines (at most 4000 characters), and the full log path. The pane then closes. Closing the pane yourself stops the whole process group, and the parent receives the job as `interrupted`. Delivery is claimed once on disk, and a Rex outage only delays it. When the session shuts down or reloads, running jobs keep their panes and logs, but their results are no longer delivered to the parent.
+
 ## Herdr placement
 
 Herdr uses `auto` placement by default. The first child shares the parent tab when both panes remain usable. Later children split the largest pane owned by that parent. Herdr chooses right or down from the pane geometry and opens a dedicated child tab when no safe split remains.

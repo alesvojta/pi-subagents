@@ -22,6 +22,7 @@ Source layout:
 - `src/session/` owns JSONL session helpers and trimmed fork-session logic.
 - `src/tools/` owns Pi tool/command implementations and tool policy.
 - `src/mux/` owns multiplexer internals; `src/mux.ts` is the public barrel.
+- `src/jobs/` owns Rex background shell jobs: the on-disk job contract, the in-pane runner, and launch/watch/delivery. Their tool and command live in `src/tools/job-tools.ts`.
 - `src/artifact-storage.ts` owns artifact storage roots/paths. `src/launch/prompt-artifacts.ts` owns writing launch prompt/task artifact files. Do not blur these names.
 - `src/types.ts` is shared runtime type surface only; do not turn it into a junk drawer.
 

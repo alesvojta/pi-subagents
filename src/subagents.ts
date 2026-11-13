@@ -82,6 +82,7 @@ import {
 	markInitialPromptLaunchComplete,
 	registerSubagentCoreTools,
 } from "./tools/subagent-tools.ts";
+import { registerJobTools } from "./tools/job-tools.ts";
 import { registerSubagentsView } from "./tools/subagents-view.ts";
 import { SUBAGENT_TOOL_NAME } from "./tools/tool-names.ts";
 import { adoptVerifiedRuns } from "./vf/run/adopt.ts";
@@ -146,6 +147,8 @@ export default function subagentsExtension(pi: ExtensionAPI) {
 	// Register nothing when the user has no named agents. The factory re-runs
 	// on every session replacement (/new, /resume, /fork) and on /reload, so
 	// creating an agent file and starting a session restores the full surface.
+	// Background jobs do not depend on named agents; they only need Rex.
+	registerJobTools(pi, (name) => !(process.env.PI_DENY_TOOLS ?? "").split(",").map((s) => s.trim()).includes(name));
 	if (getEffectiveAgentDefinitions().length === 0) return;
 
 	publishRunningSubagentCount(() => runningSubagents.size);
