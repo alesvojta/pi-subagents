@@ -3,7 +3,7 @@ import { closeSync, createReadStream, existsSync, openSync, readdirSync, readSyn
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { stripVTControlCharacters } from "node:util";
-import { closeRexSurface } from "../mux/rex.ts";
+import { closeRexSurface, focusRexChild, RexPaneGoneError } from "../mux/rex.ts";
 import {
 	isJobId,
 	type JobResult,
@@ -272,4 +272,21 @@ export async function stopJob(
 	}
 	const result = await waitForResult(dir, STOP_WAIT_MS);
 	return result ? { kind: "stopped", result } : { kind: "stopping" };
+}
+
+/**
+ * Focus the job's own pane from its recorded `pane.json`, optionally zoomed to fill its
+ * window. A job whose pane is gone (normally because it ended) gets a clear error.
+ */
+export function focusJob(dir: string, options: { zoom?: boolean } = {}): void {
+	const job = loadLaunchedJob(dir);
+	if (!job) throw new Error(`Job ${readJobSpec(dir).id} has no recorded pane`);
+	try {
+		focusRexChild(job.target, options);
+	} catch (error) {
+		if (!(error instanceof RexPaneGoneError)) throw error;
+		const { state } = summarizeJob(dir);
+		const ended = state === "running" ? "" : ` (job ${state})`;
+		throw new Error(`Job ${job.spec.id} has no pane anymore${ended}; read its output with /jobs log ${job.spec.id}`);
+	}
 }

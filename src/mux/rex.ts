@@ -233,3 +233,35 @@ export function renameRexChild(title: string): boolean {
 	managedChildTitles.set(key, next);
 	return true;
 }
+
+/** The owned pane no longer exists: Rex answered `not found` for exactly that block. */
+export class RexPaneGoneError extends Error {
+	constructor(blockId: string) {
+		super(`Rex pane ${blockId} no longer exists`);
+		this.name = "RexPaneGoneError";
+	}
+}
+
+/**
+ * Focus an owned child or job pane, optionally zoomed to fill its window. The target is always
+ * the saved full block ID with an explicit session, never a label, which can also name a window.
+ * Placement is unaffected: later launches still anchor on the caller's REX_BLOCK.
+ */
+export function focusRexChild(owned: RexChildTarget, options: { zoom?: boolean } = {}): void {
+	const caller = requireRexCaller();
+	if (owned.sessionId !== caller.sessionId) throw new Error("Refusing to focus a pane from another Rex session");
+	rexChildTarget({ sessionId: owned.sessionId, blockId: owned.parentBlockId }, owned.blockId);
+	if (owned.blockId === caller.blockId) throw new Error("Refusing to focus the Rex caller's own block as a child");
+	const quiet = { ...OPTIONS, stdio: "pipe" as const };
+	const run = (args: string[]) => {
+		try {
+			execFileSync("rex", scopedArgs(owned, args), quiet);
+		} catch (error) {
+			const stderr = String((error as { stderr?: unknown })?.stderr ?? "");
+			if (stderr.includes(`target "${owned.blockId}" not found`)) throw new RexPaneGoneError(owned.blockId);
+			throw new Error(stderr.trim().replace(/^Error:\s*/, "") || (error as Error).message);
+		}
+	};
+	run(["focus", owned.blockId]);
+	if (options.zoom) run(["zoom", "-b", owned.blockId, "--on"]);
+}

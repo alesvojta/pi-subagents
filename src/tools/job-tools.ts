@@ -3,6 +3,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Type } from "typebox";
 import {
 	findJobDir,
+	focusJob,
 	formatJobList,
 	formatJobLog,
 	type JobLogRequest,
@@ -106,7 +107,7 @@ function errorResult(prefix: string, error: unknown) {
 	return { ...textResult(`${prefix}: ${message}`, { error: message }), isError: true };
 }
 
-const JOBS_USAGE = "Usage: /jobs | /jobs log <id> [lines] | /jobs stop <id>";
+const JOBS_USAGE = "Usage: /jobs | /jobs log <id> [lines] | /jobs stop <id> | /jobs focus <id> [--zoom]";
 
 /** Background shell jobs exist only inside Rex; outside it neither the tools nor the commands are registered. */
 export function registerJobTools(pi: ExtensionAPI, shouldRegister: (name: string) => boolean): void {
@@ -227,7 +228,7 @@ export function registerJobTools(pi: ExtensionAPI, shouldRegister: (name: string
 	});
 
 	pi.registerCommand("jobs", {
-		description: "List this session's background jobs, show a job's log, or stop a job",
+		description: "List this session's background jobs, show a job's log, stop a job, or focus a job's pane",
 		handler: async (args, ctx) => {
 			const [action, id, lines, ...rest] = args.trim().split(/\s+/).filter(Boolean);
 			try {
@@ -237,6 +238,8 @@ export function registerJobTools(pi: ExtensionAPI, shouldRegister: (name: string
 					ctx.ui.notify(await showJobLog(ctx, id, { tail: lines ? Number(lines) : 20 }), "info");
 				} else if (action === "stop" && id && !lines) {
 					ctx.ui.notify(await stopSessionJob(pi, ctx, id), "info");
+				} else if (action === "focus" && id && !rest.length && (!lines || lines === "--zoom")) {
+					focusJob(requireJobDir(ctx, id), { zoom: lines === "--zoom" });
 				} else {
 					ctx.ui.notify(JOBS_USAGE, "warning");
 				}

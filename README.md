@@ -985,6 +985,8 @@ Recorded Rex children can resume only in their original Rex project session. Res
 
 Each Rex child block shows its status (Rex program status, OSC 7501): working, blocked on a dialog, done, or error. Pi reports these states itself while it runs. If the child crashes, is killed by a signal, or exits with a non-zero code, the child launcher reports `error` in the same status record, because Pi can no longer report it. A clean exit leaves the status to Pi. Other backends get no status output.
 
+To jump to a running child's pane, type `/subagents focus <id|name> [--zoom]`, or press `f` (focus) or `z` (focus and zoom) on the child in the `/subagents` Running tab. The overlay closes itself. A name works when exactly one running child has it. Focus moves your Rex client to the child block, which also helps when the child sits in an `Agents` or `Agents 2` window. `--zoom` makes the block fill its window. This changes only the display, not the layout. The zoom stays on until you turn it off in Rex (`rex zoom --off` or Rex's zoom key). The target is always the child's saved block ID in the parent's Rex session, never a label, so only children that this parent launched can be focused. Focus does not change placement: the next child still splits the parent's own block. Outside Rex, and for background children without a pane, the command reports that there is no Rex pane. Focus for other backends is not implemented.
+
 The optional `set_tab_title` tool names only the child block. It does not rename a shared Rex window or project session. It reports `Title unchanged` when a manual title or ownership check prevents a rename. Existing model/title extensions remain responsible for their model-tag and task-title policy.
 
 ### Reattach after reload or restart
@@ -1015,6 +1017,7 @@ Jobs of the current session can be listed, read, and stopped, whether they are r
 | `rex_job_list` | `/jobs` | Each job's ID, state (`running`, `completed`, `failed`, `interrupted`, or `lost` when its runner vanished without a result), exit code, run time, name, and command. |
 | `rex_job_log` (`id`, optional `tail`, or `from`/`to`) | `/jobs log <id> [lines]` | Part of the job's log with terminal controls removed: the last lines by default (100 for the tool, 20 for the command), or a 1-based line range. At most 1000 lines and 16000 characters per read. |
 | `rex_job_stop` (`id`) | `/jobs stop <id>` | Sends SIGTERM to the job's runner, which stops the whole process group (SIGKILL after 2 s). The parent receives the job once as `interrupted` with its output so far, noted as stopped on request. |
+| — | `/jobs focus <id> [--zoom]` | Moves your Rex client to the job's pane, often in a `Jobs` window. `--zoom` makes the pane fill its window until you turn zoom off in Rex. A job that ended has no pane anymore, and the command says so. |
 
 Only jobs in the current session's artifact directory are reachable; job IDs from another session and other panes are rejected. Before it sends a signal, stop checks that the recorded pid still belongs to that job's runner. If it does not, stop closes only that job's own pane. Stopping a job that no parent watches yet starts watching it again, so its result is still delivered once. Each tool can be denied through `PI_DENY_TOOLS` like the others.
 

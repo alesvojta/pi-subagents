@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
 	findJobDir,
+	focusJob,
 	formatJobList,
 	formatJobLog,
 	listJobs,
@@ -172,5 +173,21 @@ describe("background job control", () => {
 		await until(() => deliveries.length === 1, "the delivery", 6000);
 		assert.equal(deliveries[0].status, "interrupted");
 		assert.equal((await stopping).kind, "stopping");
+	});
+
+	it("focuses a job's recorded pane and explains a pane that is gone", () => {
+		const f = useFakeRex();
+		const { job, jobsDir } = launchInSession("sleep 30");
+		focusJob(job.dir, { zoom: true });
+		assert.deepEqual(f.calls().filter((args) => args[1] === "focus" || args[1] === "zoom"), [
+			["--autostart=false", "focus", job.blockId, "-s", job.target.sessionId],
+			["--autostart=false", "zoom", "-b", job.blockId, "--on", "-s", job.target.sessionId],
+		]);
+
+		writeResult(job.dir, job.spec.id);
+		f.updateState(() => ({ closedBlocks: [job.blockId] }));
+		assert.throws(() => focusJob(job.dir), new RegExp(`Job ${job.spec.id} has no pane anymore \\(job completed\\); read its output with /jobs log`));
+		const unlaunched = writeJob(jobsDir, "job-0000000a", "true");
+		assert.throws(() => focusJob(unlaunched), /no recorded pane/);
 	});
 });

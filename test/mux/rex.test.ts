@@ -2,7 +2,7 @@ import { assert, describe, it, writeExecutable, writeFileSync } from "../support
 import { getMuxBackend, requireMuxBackend } from "../../src/mux/core.ts";
 import { closeSurface, closeSurfaceAsync, readScreen, readScreenAsync, sendCommand, sendShellCommand } from "../../src/mux/io.ts";
 import { createSurface, createSurfaceSplit, renameCurrentTab, renameWorkspace } from "../../src/mux/surfaces.ts";
-import { createRexCommandSurface, waitForRexExit, rexChildTarget } from "../../src/mux/rex.ts";
+import { createRexCommandSurface, focusRexChild, RexPaneGoneError, waitForRexExit, rexChildTarget } from "../../src/mux/rex.ts";
 import { pollForExit } from "../../src/mux/poll.ts";
 import { REX_CHILD, REX_PARENT, REX_SESSION, useFakeRex } from "../support/rex.ts";
 
@@ -134,5 +134,31 @@ describe("native Rex backend", () => {
 		assert.throws(() => closeSurface(REX_PARENT, owned), /match saved ownership/);
 		assert.throws(() => rexChildTarget({ sessionId: REX_SESSION, blockId: REX_PARENT }, REX_PARENT), /ownership/);
 		assert.ok(!f.calls().some((args) => args.includes(REX_PARENT)));
+	});
+
+	it("focuses only an owned child by full block ID and explicit session, zooming on request", () => {
+		const f = useFakeRex();
+		const owned = rexChildTarget({ sessionId: REX_SESSION, blockId: REX_PARENT }, REX_CHILD);
+		focusRexChild(owned);
+		focusRexChild(owned, { zoom: true });
+		const focusCalls = () => f.calls().filter((args) => args[1] === "focus" || args[1] === "zoom");
+		assert.deepEqual(focusCalls(), [
+			["--autostart=false", "focus", REX_CHILD, "-s", REX_SESSION],
+			["--autostart=false", "focus", REX_CHILD, "-s", REX_SESSION],
+			["--autostart=false", "zoom", "-b", REX_CHILD, "--on", "-s", REX_SESSION],
+		]);
+
+		const otherSession = "session:99999999-9999-4999-8999-999999999999";
+		assert.throws(() => focusRexChild({ ...owned, sessionId: otherSession }), /another Rex session/);
+		assert.throws(() => focusRexChild({ sessionId: REX_SESSION, blockId: REX_PARENT, parentBlockId: REX_CHILD }), /caller's own block/);
+		assert.throws(() => focusRexChild({ ...owned, blockId: "logs" }), /ownership/);
+		f.updateState(() => ({ closedBlocks: [REX_CHILD] }));
+		assert.throws(() => focusRexChild(owned), RexPaneGoneError);
+		assert.equal(focusCalls().length, 4, "refused targets never reach rex focus");
+
+		// Focus moves only the client's view; the next child still splits the caller's own block.
+		createRexCommandSurface("next", ["pi"], "/tmp", { policy: "right" });
+		const split = f.calls().find((args) => args[1] === "split");
+		assert.equal(split?.[split.indexOf("-b") + 1], REX_PARENT);
 	});
 });

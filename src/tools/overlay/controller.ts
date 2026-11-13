@@ -26,10 +26,10 @@ export interface OverlayRuntime extends ResumeServiceRuntime {
 	orchestrator?: OrchestratorController;
 }
 
-export type SubagentsOverlayResult = {
-	kind: "fresh-session";
-	targetMode: boolean;
-} | null;
+export type SubagentsOverlayResult =
+	| { kind: "fresh-session"; targetMode: boolean }
+	| { kind: "focus"; id: string; zoom: boolean }
+	| null;
 
 const FALLBACK_BODY_HEIGHT = 24;
 
@@ -191,6 +191,10 @@ export class SubagentsOverlayController implements Component {
 		}
 		if (matchesKey(data, "k") && item.canKill && item.onKill) {
 			this.state.view = { kind: "confirm", item, confirmed: true };
+			return;
+		}
+		if ((matchesKey(data, "f") || matchesKey(data, "z")) && item.canFocus) {
+			this.finish({ kind: "focus", id: item.id, zoom: matchesKey(data, "z") });
 			return;
 		}
 		if (matchesKey(data, "m") && item.canResume) {

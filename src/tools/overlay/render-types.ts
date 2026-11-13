@@ -39,6 +39,8 @@ export interface OverlayItem {
 	canKill: boolean;
 	canResume: boolean;
 	canToggle?: boolean;
+	/** A running child with an owned Rex pane; `f` focuses it, `z` focuses and zooms it. */
+	canFocus?: boolean;
 	onToggle?: () => void;
 	sessionFile?: string;
 	onKill?: () => Promise<void>;

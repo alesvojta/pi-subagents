@@ -14,6 +14,7 @@ import type {
 	SessionMessageLike,
 	SessionUsage,
 } from "../../types.ts";
+import { canFocusSubagent } from "../subagent-focus.ts";
 import { compactCount, firstLine, formatElapsed, formatElapsedSeconds } from "./render-helpers.ts";
 import type { DetailSection, OverlayContext, OverlayItem } from "./render-types.ts";
 
@@ -448,6 +449,7 @@ export function buildRunningItems(ctx: OverlayContext): OverlayItem[] {
 			detailSections: sections,
 			canKill: true,
 			canResume: false,
+			canFocus: canFocusSubagent(a),
 			sessionFile: a.sessionFile,
 			onKill: async () => {
 				// Operator surface: a human may cancel even a non-recipient's run.

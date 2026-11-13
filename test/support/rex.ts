@@ -94,6 +94,10 @@ if (op === 'block' && args[2] === 'inspect') {
 } else if (op === 'capture') {
  if (state.captureFail) process.exit(3);
  setTimeout(() => console.log(state.screen ?? 'line one\\nline two'), state.captureDelay ?? 0);
+} else if (op === 'focus' || op === 'zoom') {
+ const block = op === 'focus' ? args[2] : args[args.indexOf('-b') + 1];
+ if (state.closedBlocks?.includes(block)) { console.error('Error: block or window target "' + block + '" not found'); process.exit(3); }
+ if (state.controlFail) { console.error('Error: server disconnected'); process.exit(1); }
 } else if (op === 'send' || op === 'send-key' || (op === 'block' && ['rename','close'].includes(args[2]))) {
  if (state.controlFail) process.exit(3);
  if (args[2] === 'rename') {state.label=args.at(-1);fs.writeFileSync(${JSON.stringify(state)},JSON.stringify(state));}

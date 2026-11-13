@@ -25,6 +25,7 @@ import "./session/completion-reason.test.ts";
 import "./tools/subagent-done-recovery.test.ts";
 import "./tools/provider-error-recovery.test.ts";
 import "./tools/subagents-view.test.ts";
+import "./tools/subagent-focus.test.ts";
 import "./tools/agents-tab-toggle.test.ts";
 import "./tools/orchestrator-view.test.ts";
 import "./tools/message-renderers.test.ts";

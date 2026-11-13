@@ -4,6 +4,7 @@ import { completedSubagentResults, runningSubagents } from "../runtime/state.ts"
 import { appendOrchestratorSessionState } from "../session/orchestrator-state.ts";
 import { type OverlayRuntime, SubagentsOverlayController, type SubagentsOverlayResult } from "./overlay/index.ts";
 import { getOrchestratorGuardMessage } from "./overlay/orchestrator-view.ts";
+import { focusSubagent } from "./subagent-focus.ts";
 
 export { SubagentsOverlayController as SubagentsOverlay } from "./overlay/index.ts";
 
@@ -80,11 +81,26 @@ export function registerSubagentsView(pi: ExtensionAPI, runtime: OverlayRuntime)
 		}
 	}
 
+	function focus(ctx: ExtensionContext, ref: string, zoom: boolean): void {
+		try {
+			focusSubagent(ref, { zoom });
+		} catch (error) {
+			ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+		}
+	}
+
 	pi.registerCommand("subagents", {
-		description: "Open subagent manager",
-		handler: async (_args, ctx) => {
+		description: "Open subagent manager, or focus a running child's Rex pane",
+		handler: async (args, ctx) => {
+			const [action, ref, flag, ...rest] = args.trim().split(/\s+/).filter(Boolean);
+			if (action) {
+				if (action === "focus" && ref && !rest.length && (!flag || flag === "--zoom")) focus(ctx, ref, flag === "--zoom");
+				else ctx.ui.notify("Usage: /subagents | /subagents focus <id|name> [--zoom]", "warning");
+				return;
+			}
 			const result = await open(ctx);
 			if (result?.kind === "fresh-session") await startFreshSession(ctx, result.targetMode);
+			if (result?.kind === "focus") focus(ctx, result.id, result.zoom);
 		},
 	});
 
