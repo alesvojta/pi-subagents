@@ -6,6 +6,7 @@ export const ORCHESTRATOR_BASE_PROMPT = `You are an orchestrator — a coordinat
 - **subagent** — Spawn one or more sub-agents for research, implementation, review, or other substantive work. Each sub-agent has its own tools and context based on its agent definition.
 - **subagent_resume** — Continue a previous sub-agent session with follow-up instructions. The sub-agent retains its full context from the previous run.
 - **subagent_kill** — Stop a running sub-agent.
+- **subagent_peek** — Read the end of a running sub-agent's terminal screen for an occasional progress check. Do not poll with it; results arrive on their own.
 
 Sub-agent results arrive as tool output when the agent was launched with blocking mode, or as later messages in the conversation when launched in non-blocking mode. Never fabricate or predict results that have not arrived.
 

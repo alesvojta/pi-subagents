@@ -113,7 +113,7 @@ Enable that and two things change:
 
 1. **Tool restriction.** Removes read, bash, edit, write,
    grep, find, and every other tool except subagent,
-   subagent_kill, subagent_resume. The LLMs cannot call what they cannot see.
+   subagent_kill, subagent_resume, subagent_peek. The LLMs cannot call what they cannot see.
 2. **System prompt replacement.** Pi's "expert coding assistant" prompt gets
    replaced with one that defines the orchestrator role: decompose, delegate,
    synthesize. The replacement preserves Pi's `APPEND_SYSTEM.md` content.
@@ -644,6 +644,14 @@ Resume tries to preserve the original launch shape: mode, model, prompt style, c
 
 One exception: attempt sessions of an `llm-as-a-verifier` launch are never resumable — their worktree copy is removed after the winner is picked. `subagent_resume` refuses with a dedicated error; launch the agent again instead.
 
+### Check on a running child
+
+`subagent_peek` (`id`, optional `lines`) returns the last lines of a running interactive child's terminal screen without waiting for it or interrupting it. The default is 40 lines, the maximum is 200, and the text is capped at 8000 characters. Terminal controls and frame rows (rules, box borders) are removed. You can use the child's name when exactly one running child has it. The user command is `/subagents peek <id|name> [lines]` (20 lines by default).
+
+Peek is meant for an occasional progress check, for example when the user asks how a child is doing. The tool's guidelines tell the model not to call it in a loop and not to redo the child's work because of what it sees: the result is still delivered automatically.
+
+Only children launched by this parent can be read. A Rex child is always read through its saved block ID, never the focused block. A background child has no screen, so the answer says that and adds its current activity and latest assistant text when known. A child that already finished, or whose pane is gone, gets a plain answer instead of a transport error. `subagent_peek` is one of the spawning tools: a child without `spawning` does not get it, `PI_DENY_TOOLS` can remove it, and orchestrator mode keeps it.
+
 ## Child output
 
 The child's final assistant message is its output.
@@ -840,9 +848,9 @@ deny-tools: bash,edit,write,ask_user
 ---
 ```
 
-By default a child cannot launch subagents: `spawning` is `false`, which removes its `subagent`, `subagent_resume`, and `subagent_kill` tools. Set `spawning` only on agents that coordinate others. The four fields above define what such a child may do; this section adds the rules the table cannot show.
+By default a child cannot launch subagents: `spawning` is `false`, which removes its `subagent`, `subagent_resume`, `subagent_kill`, and `subagent_peek` tools. Set `spawning` only on agents that coordinate others. The four fields above define what such a child may do; this section adds the rules the table cannot show.
 
-`tools:` narrows the child's work tools; it does not revoke a spawn grant. When `spawning` is enabled, `subagent`, `subagent_resume`, and `subagent_kill` stay available alongside a narrowed `tools:` list, exactly like `caller_ping` and `subagent_done`. Use `deny-tools` (or leave `spawning` off) to take them away.
+`tools:` narrows the child's work tools; it does not revoke a spawn grant. When `spawning` is enabled, `subagent`, `subagent_resume`, `subagent_kill`, and `subagent_peek` stay available alongside a narrowed `tools:` list, exactly like `caller_ping` and `subagent_done`. Use `deny-tools` (or leave `spawning` off) to take them away.
 
 `spawn-depth` is what stops two agents that launch each other from looping forever: the allowance drops by one at each level and never rises. `spawn-depth` and `spawn-width` bound a single burst of launches; they do not cap total token use over a long conversation. These fields are guardrails, not a security sandbox — a child that has `bash` or arbitrary extensions can still run `pi` itself.
 

@@ -305,7 +305,7 @@ describe("agent launch configuration", () => {
 		};
 		assert.deepEqual(await getPersistedSessionParityArgsForTest(metadata, "background", true), [
 			"--tools",
-			"exec_command,caller_ping,subagent_done,subagent,subagent_resume,subagent_kill",
+			"exec_command,caller_ping,subagent_done,subagent,subagent_resume,subagent_kill,subagent_peek",
 			"--no-approve",
 		]);
 		assert.deepEqual(await getPersistedSessionParityArgsForTest(metadata, "background", false), [

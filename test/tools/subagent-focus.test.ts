@@ -110,8 +110,8 @@ describe("subagent pane focus", () => {
 			["--autostart=false", "zoom", "-b", REX_CHILD, "--on", "-s", REX_SESSION],
 		]);
 		assert.deepEqual(notes, [
-			"Usage: /subagents | /subagents focus <id|name> [--zoom]",
-			"Usage: /subagents | /subagents focus <id|name> [--zoom]",
+			"Usage: /subagents | /subagents focus <id|name> [--zoom] | /subagents peek <id|name> [lines]",
+			"Usage: /subagents | /subagents focus <id|name> [--zoom] | /subagents peek <id|name> [lines]",
 			"No running subagent nobody in this session",
 		]);
 	});

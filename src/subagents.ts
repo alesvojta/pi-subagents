@@ -83,8 +83,9 @@ import {
 	registerSubagentCoreTools,
 } from "./tools/subagent-tools.ts";
 import { registerJobTools } from "./tools/job-tools.ts";
+import { registerSubagentPeekTool } from "./tools/subagent-peek.ts";
 import { registerSubagentsView } from "./tools/subagents-view.ts";
-import { SUBAGENT_TOOL_NAME } from "./tools/tool-names.ts";
+import { SUBAGENT_PEEK_TOOL_NAME, SUBAGENT_TOOL_NAME } from "./tools/tool-names.ts";
 import { adoptVerifiedRuns } from "./vf/run/adopt.ts";
 import { setRexChildRecordScope } from "./runtime/rex-child-records.ts";
 import { reattachRexChildren } from "./runtime/rex-reattach.ts";
@@ -412,6 +413,8 @@ export default function subagentsExtension(pi: ExtensionAPI) {
 		stopRunningSubagent,
 		muxUnavailableResult: () => muxUnavailableResult("tab-title"),
 	});
+
+	if (shouldRegister(SUBAGENT_PEEK_TOOL_NAME)) registerSubagentPeekTool(pi);
 
 	registerSubagentResumeTool(pi, shouldRegister, {
 		getShellReadyDelayMs,

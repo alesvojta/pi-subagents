@@ -75,6 +75,7 @@ describe("spawn-related agent fields", () => {
 		assert.deepEqual([...resolveDenyToolsForTest({ spawning: false })].sort(), [
 			"subagent",
 			"subagent_kill",
+			"subagent_peek",
 			"subagent_resume",
 		]);
 	});

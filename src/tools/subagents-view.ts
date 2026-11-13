@@ -5,8 +5,11 @@ import { appendOrchestratorSessionState } from "../session/orchestrator-state.ts
 import { type OverlayRuntime, SubagentsOverlayController, type SubagentsOverlayResult } from "./overlay/index.ts";
 import { getOrchestratorGuardMessage } from "./overlay/orchestrator-view.ts";
 import { focusSubagent } from "./subagent-focus.ts";
+import { peekSubagent } from "./subagent-peek.ts";
 
 export { SubagentsOverlayController as SubagentsOverlay } from "./overlay/index.ts";
+
+const SUBAGENTS_USAGE = "Usage: /subagents | /subagents focus <id|name> [--zoom] | /subagents peek <id|name> [lines]";
 
 export function registerSubagentsView(pi: ExtensionAPI, runtime: OverlayRuntime) {
 	let activeOverlay: SubagentsOverlayController | null = null;
@@ -89,13 +92,23 @@ export function registerSubagentsView(pi: ExtensionAPI, runtime: OverlayRuntime)
 		}
 	}
 
+	async function peek(ctx: ExtensionContext, ref: string, lines?: number): Promise<void> {
+		try {
+			ctx.ui.notify(await peekSubagent(ref, lines ?? 20), "info");
+		} catch (error) {
+			ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+		}
+	}
+
 	pi.registerCommand("subagents", {
-		description: "Open subagent manager, or focus a running child's Rex pane",
+		description: "Open subagent manager, focus a running child's Rex pane, or show the end of its screen",
 		handler: async (args, ctx) => {
 			const [action, ref, flag, ...rest] = args.trim().split(/\s+/).filter(Boolean);
 			if (action) {
 				if (action === "focus" && ref && !rest.length && (!flag || flag === "--zoom")) focus(ctx, ref, flag === "--zoom");
-				else ctx.ui.notify("Usage: /subagents | /subagents focus <id|name> [--zoom]", "warning");
+				else if (action === "peek" && ref && !rest.length && (!flag || /^\d+$/.test(flag)))
+					await peek(ctx, ref, flag ? Number(flag) : undefined);
+				else ctx.ui.notify(SUBAGENTS_USAGE, "warning");
 				return;
 			}
 			const result = await open(ctx);

@@ -93,6 +93,7 @@ if (op === 'block' && args[2] === 'inspect') {
  json({window_id:window,block_ids:[created(window, [0, 0, 1, 1])]});
 } else if (op === 'capture') {
  if (state.captureFail) process.exit(3);
+ if (state.closedBlocks?.includes(args[3])) { console.error('Error: block target "' + args[3] + '" not found'); process.exit(3); }
  setTimeout(() => console.log(state.screen ?? 'line one\\nline two'), state.captureDelay ?? 0);
 } else if (op === 'focus' || op === 'zoom') {
  const block = op === 'focus' ? args[2] : args[args.indexOf('-b') + 1];

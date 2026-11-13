@@ -110,6 +110,7 @@ describe("launch coordinator", () => {
 			"bash",
 			"subagent",
 			"subagent_kill",
+			"subagent_peek",
 			"subagent_resume",
 		]);
 

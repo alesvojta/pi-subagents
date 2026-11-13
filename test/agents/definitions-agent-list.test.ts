@@ -473,6 +473,7 @@ describe("agent definitions and catalog", () => {
 		assert.deepEqual([...resolveDenyToolsForTest(worker ?? null)].sort(), [
 			"subagent",
 			"subagent_kill",
+			"subagent_peek",
 			"subagent_resume",
 		]);
 		assert.deepEqual([...resolveDenyToolsForTest(coordinator ?? null)], []);

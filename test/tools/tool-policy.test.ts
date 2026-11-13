@@ -90,6 +90,7 @@ describe("tool policy", () => {
 					"subagent",
 					"subagent_resume",
 					"subagent_kill",
+					"subagent_peek",
 				]);
 			});
 		});
@@ -112,6 +113,7 @@ describe("tool policy", () => {
 					"subagent_done",
 					"subagent",
 					"subagent_kill",
+					"subagent_peek",
 				]);
 			});
 		});
@@ -120,7 +122,7 @@ describe("tool policy", () => {
 			withSetTabTitleEnv(undefined, () => {
 				assert.deepEqual(getSubagentToolLaunchArgsForTest("exec_command", [], true), [
 					"--tools",
-					"exec_command,caller_ping,subagent_done,subagent,subagent_resume,subagent_kill",
+					"exec_command,caller_ping,subagent_done,subagent,subagent_resume,subagent_kill,subagent_peek",
 				]);
 			});
 		});
