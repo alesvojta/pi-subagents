@@ -16,6 +16,7 @@ process.env.PI_ARTIFACT_PROJECT_ROOT = join(root, "artifacts");
 const { launchRexJob, watchRexJob } = await import("../src/jobs/job-launch.ts");
 const { getSessionJobsDir, jobPaths } = await import("../src/jobs/job-files.ts");
 const { listJobs, readJobLog, stopJob } = await import("../src/jobs/job-control.ts");
+const { reattachRexJobs } = await import("../src/jobs/job-reattach.ts");
 const rex = (...args) => execFileSync("rex", ["--autostart=false", ...args], { encoding: "utf8", timeout: 15_000 });
 const json = (...args) => JSON.parse(rex(...args));
 const isAlive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -109,6 +110,41 @@ try {
     assert.equal(blockExists(long.blockId), false, "the stopped job's pane closes after delivery");
     console.log(`PASS: stopping a ${watched ? "watched" : "no longer watched"} job kills its process group and delivers interrupted once`);
   }
+
+  // Program status: a pane nobody watches keeps its final state, and the next start delivers it.
+  const statusOf = (block) => json("block", "call", "-s", session, "-b", block, "program_status").records?.[0];
+  const waitFor = async (what, check) => {
+    for (let i = 0; i < 100; i++) { const value = check(); if (value) return value; await delay(100); }
+    throw new Error(`Timed out waiting for ${what}`);
+  };
+  const unwatched = (command, name) => launchRexJob({ command, cwd: root, jobsDir, name });
+  const passing = unwatched("sleep 1.5; echo status-ok", "status ok");
+  const failing = unwatched("sleep 1.5; exit 5", "status fail");
+  const stopping = unwatched("sleep 300", "status stop");
+  const working = await waitFor("working", () => statusOf(passing.blockId)?.state === "working" && statusOf(passing.blockId));
+  assert.equal(working.app, "shell");
+  assert.equal(working.title, "status ok");
+  const runner = await waitFor("the runner pid", () => existsSync(jobPaths(stopping.dir).runner) && JSON.parse(readFileSync(jobPaths(stopping.dir).runner, "utf8")));
+  process.kill(runner.pid, "SIGTERM");
+  const done = await waitFor("done", () => statusOf(passing.blockId)?.state === "done" && statusOf(passing.blockId));
+  assert.match(done.msg, /^completed · exit 0/);
+  const error = await waitFor("error", () => statusOf(failing.blockId)?.state === "error" && statusOf(failing.blockId));
+  assert.match(error.msg, /^failed · exit 5/);
+  const idle = await waitFor("idle", () => statusOf(stopping.blockId)?.state === "idle" && statusOf(stopping.blockId));
+  assert.equal(idle.msg, "stopped (SIGTERM)");
+  assert.doesNotMatch(readFileSync(jobPaths(passing.dir).log, "utf8"), /7501/);
+  console.log("PASS: job panes report working, then done / error / idle, and keep it while undelivered");
+
+  const reattached = [];
+  const adopted = reattachRexJobs(jobsDir, (_job, value) => reattached.push(value));
+  assert.deepEqual(adopted.map((j) => j.spec.id).sort(), [passing, failing, stopping].map((j) => j.spec.id).sort());
+  await waitFor("three reattached deliveries", () => reattached.length === 3);
+  await delay(500);
+  assert.equal(reattached.length, 3);
+  assert.deepEqual(reattached.map((r) => r.status).sort(), ["completed", "failed", "interrupted"]);
+  for (const j of [passing, failing, stopping]) assert.equal(blockExists(j.blockId), false, "a reattached pane closes after delivery");
+  assert.deepEqual(reattachRexJobs(jobsDir, () => assert.fail("delivered twice")), []);
+  console.log("PASS: a restarted parent delivers jobs that ended while unwatched, once, and closes their panes");
 
   // A second watcher of a delivered job never delivers again.
   assert.equal(await watchRexJob(ok.job, () => assert.fail("delivered twice")), null);

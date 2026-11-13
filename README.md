@@ -10,7 +10,7 @@ https://github.com/user-attachments/assets/e0b97493-6c9b-4710-ba26-a6c08230ba28
 
 ## Install
 
-This fork's `main` branch builds on upstream `edxeth/pi-subagents`. It adds the native Rex backend from `sevaiam/pi-subagents` and further Rex features: one shared `rex events` stream for all children, reattaching Rex children after a reload or restart, Rex background shell jobs, and Rex child status.
+This fork's `main` branch builds on upstream `edxeth/pi-subagents`. It adds the native Rex backend from `sevaiam/pi-subagents` and further Rex features: one shared `rex events` stream for all children, reattaching Rex children after a reload or restart, Rex background shell jobs with their status and reattach, and Rex child status.
 
 ```bash
 pi install git:github.com/alesvojta/pi-subagents@main
@@ -1002,7 +1002,11 @@ Inside Rex, the parent can run long shell commands (builds, test suites, servers
 
 Each job runs with `/bin/sh -c` in its own process group, inside a pane in the parent's own `Jobs` window. Jobs never split the parent's pane. Later jobs stack inside the `Jobs` window by the same geometry rules as subagents (`Jobs 2` and so on when the window is full). The pane first shows the command and working directory, then streams the output, and ends with a summary (status, exit code, duration). The full output goes to `output.log` in the session's artifact directory (`.../artifacts/<session-id>/jobs/<job-id>/`).
 
-When the job ends, the parent receives one `rex_job_result` message with the status (`completed`, `failed`, or `interrupted`), the exit code, the last 40 output lines (at most 4000 characters), and the full log path. The pane then closes. Closing the pane yourself stops the whole process group, and the parent receives the job as `interrupted`. Delivery is claimed once on disk, and a Rex outage only delays it. When the session shuts down or reloads, running jobs keep their panes and logs, but their results are no longer delivered to the parent unless the job is stopped later.
+When the job ends, the parent receives one `rex_job_result` message with the status (`completed`, `failed`, or `interrupted`), the exit code, the last 40 output lines (at most 4000 characters), and the full log path. The pane then closes. Closing the pane yourself stops the whole process group, and the parent receives the job as `interrupted`. Delivery is claimed once on disk, and a Rex outage only delays it.
+
+The job pane shows the job's status in Rex (Rex program status, OSC 7501, as `app=shell` with the job name as title): `working` while the command runs, `done` after exit code 0, and `error` after a non-zero exit code, a signal that killed the command, a failed start, or a failed log write. A job stopped on request or by closing its pane reports `idle`, because a deliberate stop is not a failure. The status goes only to the pane's terminal, never to `output.log` or the delivered output. Outside Rex, the runner writes no status.
+
+A job outlives a reload or shutdown of its parent: the pane and log stay, and the job keeps running. When that parent session starts again (`/reload`, or `pi --session <id>` after a quit), it watches every job of the session that has not been delivered yet. A job that ended in the meantime is delivered at once as one `rex_job_result` message, and its pane closes. A job whose runner vanished without a result is resolved only on Rex's exact answer for its pane (`last_exit`, or `not found` for a closed pane), and a transport error just keeps the parent waiting. Only jobs in the session's own jobs directory whose `job.json` and recorded pane (`pane.json`) match the job are adopted. Delivery stays exactly-once across two parent processes and a concurrent stop. Print-mode (`-p`) runs do not reattach; their jobs wait for the next interactive start of the session.
 
 Jobs of the current session can be listed, read, and stopped, whether they are running or finished:
 
@@ -1012,7 +1016,7 @@ Jobs of the current session can be listed, read, and stopped, whether they are r
 | `rex_job_log` (`id`, optional `tail`, or `from`/`to`) | `/jobs log <id> [lines]` | Part of the job's log with terminal controls removed: the last lines by default (100 for the tool, 20 for the command), or a 1-based line range. At most 1000 lines and 16000 characters per read. |
 | `rex_job_stop` (`id`) | `/jobs stop <id>` | Sends SIGTERM to the job's runner, which stops the whole process group (SIGKILL after 2 s). The parent receives the job once as `interrupted` with its output so far, noted as stopped on request. |
 
-Only jobs in the current session's artifact directory are reachable; job IDs from another session and other panes are rejected. Before it sends a signal, stop checks that the recorded pid still belongs to that job's runner. If it does not, stop closes only that job's own pane. Stopping a job whose watcher was lost to a reload starts watching it again, so its result is still delivered once. Each tool can be denied through `PI_DENY_TOOLS` like the others.
+Only jobs in the current session's artifact directory are reachable; job IDs from another session and other panes are rejected. Before it sends a signal, stop checks that the recorded pid still belongs to that job's runner. If it does not, stop closes only that job's own pane. Stopping a job that no parent watches yet starts watching it again, so its result is still delivered once. Each tool can be denied through `PI_DENY_TOOLS` like the others.
 
 ## Herdr placement
 

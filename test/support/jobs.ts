@@ -2,8 +2,8 @@ import { spawn } from "node:child_process";
 import { getJobRunnerPath } from "../../src/jobs/job-launch.ts";
 
 /** Runs the real job runner for DIR, as Rex would inside the job's pane. */
-export function startRunner(dir: string) {
-	const child = spawn(process.execPath, [getJobRunnerPath(), dir], { stdio: ["ignore", "pipe", "pipe"] });
+export function startRunner(dir: string, env: NodeJS.ProcessEnv = process.env) {
+	const child = spawn(process.execPath, [getJobRunnerPath(), dir], { env, stdio: ["ignore", "pipe", "pipe"] });
 	let screen = "";
 	child.stdout.on("data", (chunk) => {
 		screen += chunk;

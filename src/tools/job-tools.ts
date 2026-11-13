@@ -20,6 +20,7 @@ import {
 	stopRexJobWatchers,
 	watchRexJob,
 } from "../jobs/job-launch.ts";
+import { reattachRexJobs } from "../jobs/job-reattach.ts";
 import { rexCaller } from "../mux/rex.ts";
 import {
 	REX_JOB_LIST_TOOL_NAME,
@@ -110,6 +111,16 @@ const JOBS_USAGE = "Usage: /jobs | /jobs log <id> [lines] | /jobs stop <id>";
 /** Background shell jobs exist only inside Rex; outside it neither the tools nor the commands are registered. */
 export function registerJobTools(pi: ExtensionAPI, shouldRegister: (name: string) => boolean): void {
 	if (!rexCaller()) return;
+
+	pi.on("session_start", (_event, ctx) => {
+		// Print-mode runs leave reattach to the next interactive start of the session.
+		if (ctx.mode === "print" || !ctx.sessionManager.getSessionId()) return;
+		try {
+			reattachRexJobs(sessionJobsDir(ctx), (job, result) => deliverJobResult(pi, job, result));
+		} catch {
+			// Reattach is best-effort; the jobs stay on disk for the next start.
+		}
+	});
 
 	pi.on("session_shutdown", (event) => {
 		// A reasonless shutdown is the coordinator-only turn stop, not the end of the session.

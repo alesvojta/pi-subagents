@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { closeRexSurface, createRexCommandSurface, type RexChildTarget, requireRexCaller, rexChildTarget, waitForRexExit } from "../mux/rex.ts";
 import { RexChildGoneError } from "../mux/rex-events.ts";
@@ -81,6 +81,7 @@ export function loadLaunchedJob(dir: string): LaunchedJob | null {
 	try {
 		const spec = readJobSpec(dir);
 		const pane = JSON.parse(readFileSync(jobPaths(dir).pane, "utf8"));
+		if (spec.id !== basename(dir) || pane.target?.blockId !== pane.blockId) return null;
 		const target = rexChildTarget({ sessionId: pane.target.sessionId, blockId: pane.target.parentBlockId }, pane.blockId);
 		return { spec, dir, blockId: target.blockId, target };
 	} catch {
@@ -120,8 +121,8 @@ async function readResultEventually(dir: string, ms: number): Promise<JobResult 
 	}
 }
 
-/** A pane that vanished before its runner wrote a result was interrupted. */
-function interruptedResult(job: LaunchedJob): JobResult {
+/** A job whose runner never wrote a result was interrupted. */
+function interruptedResult(job: LaunchedJob, pane: "exited" | "gone"): JobResult {
 	return {
 		version: 1,
 		id: job.spec.id,
@@ -130,7 +131,10 @@ function interruptedResult(job: LaunchedJob): JobResult {
 		signal: null,
 		durationMs: Date.now() - Date.parse(job.spec.createdAt),
 		tail: readLogTail(job.dir),
-		error: "The job pane closed before the job reported a result.",
+		error:
+			pane === "gone"
+				? "The job pane closed before the job reported a result."
+				: "The job runner ended without reporting a result.",
 		finishedAt: new Date().toISOString(),
 	};
 }
@@ -149,7 +153,9 @@ export async function watchRexJob(
 	liveJobs.set(job.spec.id, { job, controller });
 	try {
 		const pane = await waitForPane(job, controller.signal);
-		const result = (await readResultEventually(job.dir, RESULT_WAIT_MS)) ?? interruptedResult(job);
+		const result = (await readResultEventually(job.dir, RESULT_WAIT_MS)) ?? interruptedResult(job, pane);
+		// A watcher stopped by shutdown or reload leaves delivery to the next parent.
+		if (controller.signal.aborted) return null;
 		if (!claimJobDelivery(job.dir)) return null;
 		deliver(job, result);
 		if (pane === "exited") {
@@ -164,13 +170,17 @@ export async function watchRexJob(
 		if (controller.signal.aborted) return null;
 		throw error;
 	} finally {
-		liveJobs.delete(job.spec.id);
+		if (liveJobs.get(job.spec.id)?.controller === controller) liveJobs.delete(job.spec.id);
 	}
 }
 
-/** Stop watching every job; their panes keep running and keep their logs. */
+/**
+ * Stop watching every job; their panes keep running and keep their logs.
+ * The jobs count as unwatched at once, so a reloaded parent can reattach them.
+ */
 export function stopRexJobWatchers(): void {
 	for (const { controller } of liveJobs.values()) controller.abort();
+	liveJobs.clear();
 }
 
 export function formatJobResult(job: LaunchedJob, result: JobResult): string {

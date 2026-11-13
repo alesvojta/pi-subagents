@@ -4,6 +4,18 @@ import { JOB_TAIL_MAX_LINES, type JobSpec, jobPaths, readJobResult, writeJsonAto
 import { assert, createTestDir, describe, it } from "../support/index.ts";
 import { isAlive, startRunner } from "../support/jobs.ts";
 
+const IN_REX = { ...process.env, REX_BLOCK: "block:22222222-2222-4222-8222-222222222222" };
+
+/** Every Rex program status report on SCREEN, decoded. */
+function programStatuses(screen: string) {
+	const reports = screen.split("\x1b]7501;").slice(1).map((rest) => rest.slice(0, rest.indexOf("\x1b\\")));
+	return reports.map((body) => {
+		const fields = Object.fromEntries(body.split(":").map((field) => field.split("=", 2)));
+		const decode = (value?: string) => (value === undefined ? undefined : Buffer.from(value, "base64").toString("utf8"));
+		return { state: fields.state, app: fields.app, title: decode(fields.title), msg: decode(fields.msg) };
+	});
+}
+
 function writeJob(command: string): string {
 	const dir = join(createTestDir(), "job");
 	mkdirSync(dir);
@@ -45,6 +57,48 @@ describe("background job runner", () => {
 		assert.match(tail, /line-100$/);
 		assert.doesNotMatch(tail, /line-1\n/);
 		assert.match(readFileSync(jobPaths(dir).log, "utf8"), /^line-1\n/);
+	});
+
+	it("reports working then done, error, or idle as Rex program status, only to the pane", async () => {
+		const ok = writeJob("echo fine");
+		const okRunner = startRunner(ok, IN_REX);
+		await okRunner.exited;
+		assert.deepEqual(programStatuses(okRunner.screen()).map(({ state, app, title }) => [state, app, title]), [
+			["working", "shell", "test"],
+			["done", "shell", "test"],
+		]);
+		assert.match(programStatuses(okRunner.screen())[1].msg ?? "", /^completed · exit 0 · /);
+
+		const failed = writeJob("echo nope; exit 7");
+		const failedRunner = startRunner(failed, IN_REX);
+		assert.equal(await failedRunner.exited, 7);
+		const failure = programStatuses(failedRunner.screen());
+		assert.deepEqual(failure.map(({ state }) => state), ["working", "error"]);
+		assert.match(failure[1].msg ?? "", /^failed · exit 7 · /);
+
+		const stopped = writeJob("sleep 300");
+		const stoppedRunner = startRunner(stopped, IN_REX);
+		for (let i = 0; i < 200 && !existsSync(jobPaths(stopped).runner); i++) await new Promise((resolve) => setTimeout(resolve, 10));
+		stoppedRunner.child.kill("SIGTERM");
+		await stoppedRunner.exited;
+		assert.deepEqual(programStatuses(stoppedRunner.screen()).map(({ state, msg }) => [state, msg]), [
+			["working", undefined],
+			["idle", "stopped (SIGTERM)"],
+		]);
+
+		for (const dir of [ok, failed, stopped]) {
+			assert.doesNotMatch(readFileSync(jobPaths(dir).log, "utf8"), /7501/);
+			assert.doesNotMatch(readJobResult(dir)?.tail ?? "", /7501/);
+		}
+	});
+
+	it("writes no program status outside Rex", async () => {
+		const dir = writeJob("echo fine");
+		const env = { ...process.env };
+		delete env.REX_BLOCK;
+		const runner = startRunner(dir, env);
+		await runner.exited;
+		assert.doesNotMatch(runner.screen(), /7501/);
 	});
 
 	it("stops the whole process group on a signal and records an interruption", async () => {

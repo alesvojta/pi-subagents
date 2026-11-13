@@ -13,7 +13,8 @@ import { boundedTail, type JobResult, type JobStatus, jobPaths, readJobSpec, wri
  * and to `output.log` with backpressure, and writes `result.json` before it
  * exits with the command's status. A signal to the runner (closing the pane
  * sends SIGHUP, a parent stop sends SIGTERM) stops the whole group and is
- * recorded as an interruption.
+ * recorded as an interruption. Inside Rex it also reports the job's state
+ * to the pane as program status, never to the log.
  */
 
 const KILL_GRACE_MS = 2000;
@@ -55,11 +56,19 @@ async function show(text: string): Promise<void> {
 	}
 }
 
+// Rex program status (OSC 7501) of the pane's root record; Rex drops a report whose title or msg is not base64.
+const inRex = Boolean(process.env.REX_BLOCK);
+const base64 = (text: string) => Buffer.from(text, "utf8").toString("base64");
+function programStatus(state: "working" | "done" | "error" | "idle", msg?: string): string {
+	if (!inRex) return "";
+	return `\x1b]7501;state=${state}:app=shell:title=${base64(clean(job.name))}${msg ? `:msg=${base64(msg)}` : ""}\x1b\\`;
+}
+
 const command = clean(job.command)
 	.split("\n")
 	.map((line, index) => `${index ? "> " : "$ "}${line}`)
 	.join("\n");
-await show(`\x1b]2;Job · ${clean(job.name)}\x1b\\${blue(`Job ${job.id}`)}\ncwd: ${clean(job.cwd)}\n${command}\n\n`);
+await show(`${programStatus("working")}\x1b]2;Job · ${clean(job.name)}\x1b\\${blue(`Job ${job.id}`)}\ncwd: ${clean(job.cwd)}\n${command}\n\n`);
 
 const log = createWriteStream(paths.log, { mode: 0o600 });
 let logError: string | undefined;
@@ -132,5 +141,11 @@ const result: JobResult = {
 writeJsonAtomic(paths.result, result);
 
 const summary = `${status} · exit ${exitCode}${result.signal ? ` (${result.signal})` : ""} · ${(durationMs / 1000).toFixed(1)}s`;
-await show(`\n${tail ? "" : "(no output)\n"}${logError ? `${logError}\n` : ""}${blue(summary)}\n`);
+// A deliberate stop (request, Ctrl-C, closed pane) is not a failure, so it reports idle rather than error.
+const finalStatus = interrupted
+	? programStatus("idle", `stopped (${interrupted})`)
+	: status === "completed" && !logError
+		? programStatus("done", summary)
+		: programStatus("error", logError ?? summary);
+await show(`\n${tail ? "" : "(no output)\n"}${logError ? `${logError}\n` : ""}${blue(summary)}\n${finalStatus}`);
 process.exit(exitCode);
