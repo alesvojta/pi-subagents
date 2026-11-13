@@ -1,6 +1,7 @@
 import { outstandingWork } from "./outstanding-work.ts";
 import type { CompletedSubagentResult, RunningSubagent, SubagentPingMessageDetails, SubagentResult } from "../types.ts";
 import { formatContextExitNotice, formatFinalContextUsage, formatSessionRef } from "./final-context-usage.ts";
+import { claimRexChildDelivery } from "./rex-child-records.ts";
 import { releaseSpawnWidthSlot } from "./spawn-width.ts";
 import {
 	buildCompletedSubagentResult,
@@ -39,6 +40,14 @@ export type RoutedSubagentOutcome = RoutedCompletionOutcome | RoutedPingOutcome;
 export function routeSubagentOutcome(options: RouteSubagentOutcomeOptions): RoutedSubagentOutcome {
 	const { pi, running, result, formatElapsed, updateWidget } = options;
 	clearSubagentShutdownTimer(running);
+	// A handed-off child is still running for the next parent, and a child
+	// whose record is already gone was delivered by another parent.
+	if (running.rexHandedOff || !claimRexChildDelivery(running)) {
+		releaseSpawnWidthSlot(running);
+		runningSubagents.delete(running.id);
+		updateWidget();
+		return { kind: "completion", completed: buildCompletedSubagentResult(running, result) };
+	}
 	if (result.ping) {
 		runningSubagents.delete(running.id);
 		updateWidget();

@@ -1,9 +1,12 @@
 import { disposeSubagentLaunchCapsule } from "../launch/env-capsule.ts";
 import type { CompletedSubagentResult, ParentClosePolicy, ParentShutdownAction, RunningSubagent } from "../types.ts";
+import { claimRexChildDelivery } from "./rex-child-records.ts";
 import { clearSubagentShutdownTimer } from "./state.ts";
 
 export type ShutdownSubagentsOptions = {
 	escalationMs?: number;
+	/** Pi's shutdown reason; `reload` keeps recorded Rex children running for the reloaded parent. */
+	reason?: string;
 };
 
 export interface ShutdownRuntime {
@@ -48,6 +51,15 @@ async function terminateInteractiveSubagent(running: RunningSubagent, runtime: S
 	}
 }
 
+/**
+ * A recorded Rex pane child outlives a reload (the parent process stays) and,
+ * with `parent-close-policy: continue`, a quit; a later parent reattaches it.
+ */
+function shouldHandOffRexChild(agent: RunningSubagent, reason: string | undefined): boolean {
+	if (agent.mode !== "interactive" || !agent.rexTarget || !agent.rexRecordFile) return false;
+	return reason === "reload" || agent.parentClosePolicy === "continue";
+}
+
 export async function shutdownSubagentsForParentExit(
 	runtime: ShutdownRuntime,
 	options: ShutdownSubagentsOptions = {},
@@ -65,11 +77,23 @@ export async function shutdownSubagentsForParentExit(
 		action: ParentShutdownAction;
 	}> = [];
 
+	// Detach every child before the first await, so no result can steer into
+	// a session that is already shutting down.
 	for (const agent of runtime.runningSubagents.values()) {
 		clearSubagentShutdownTimer(agent);
 		agent.allowSteerDelivery = false;
 		agent.resultOwner = undefined;
 		agent.deliveryState = "detached";
+		if (shouldHandOffRexChild(agent, options.reason)) agent.rexHandedOff = true;
+	}
+
+	for (const agent of runtime.runningSubagents.values()) {
+		if (agent.rexHandedOff) {
+			actions.push({ id: agent.id, policy: agent.parentClosePolicy, action: "continue" });
+			// Stop watching without closing the pane; the record stays for the next parent.
+			agent.abortController?.abort();
+			continue;
+		}
 
 		if (agent.parentClosePolicy === "continue") {
 			actions.push({
@@ -85,6 +109,8 @@ export async function shutdownSubagentsForParentExit(
 			policy: agent.parentClosePolicy,
 			action: "terminate",
 		});
+		// A terminated child has no result left to deliver to any parent.
+		claimRexChildDelivery(agent);
 		if (agent.mode === "interactive") {
 			await terminateInteractiveSubagent(agent, runtime);
 		} else {

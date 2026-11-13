@@ -101,6 +101,9 @@ export class SubagentWidgetManager {
 			this.widgetInterval = null;
 		}
 		this.widgetFrame = 0;
+		// The context is stale once its session shuts down or reloads; a watcher
+		// that settles afterwards must not touch it (Pi throws on stale ctx use).
+		this.latestCtx = null;
 	}
 
 	attachContext(ctx: ExtensionContext): void {

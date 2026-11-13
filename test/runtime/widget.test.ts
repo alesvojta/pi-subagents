@@ -31,6 +31,25 @@ function makeRunningSubagent(index: number): RunningSubagent {
 }
 
 describe("widget manager direct module tests", () => {
+	it("drops its session context on reset, so a watcher settling after a reload never reads a stale ctx", () => {
+		let active = true;
+		const widgets: unknown[] = [];
+		const ctx = {
+			get hasUI() {
+				if (!active) throw new Error("This extension ctx is stale after session replacement or reload.");
+				return true;
+			},
+			ui: { theme: { fg: (_tone: string, text: string) => text, bold: (text: string) => text }, setWidget: (...args: unknown[]) => widgets.push(args) },
+		};
+		const widget = new SubagentWidgetManager(() => [makeRunningSubagent(1)]);
+		widget.attachContext(ctx as never);
+		assert.equal(widgets.length, 1);
+		widget.reset();
+		active = false;
+		assert.doesNotThrow(() => widget.update());
+		assert.equal(widgets.length, 1);
+	});
+
 	it("renders nothing when no subagents are running", () => {
 		const widget = new SubagentWidgetManager(() => []);
 		assert.deepEqual(widget.renderForTest(), []);

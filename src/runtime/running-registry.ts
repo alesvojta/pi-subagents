@@ -11,6 +11,7 @@ import {
 	requestSubagentBatchStop,
 	runningSubagents,
 } from "./state.ts";
+import { claimRexChildDelivery } from "./rex-child-records.ts";
 import { releaseSpawnWidthSlot } from "./spawn-width.ts";
 
 export interface RunningRegistryRuntime {
@@ -257,6 +258,7 @@ export function wireSubagentSteerBack(
 			releaseSpawnWidthSlot(running);
 			runningSubagents.delete(running.id);
 			updateWidget();
+			if (running.rexHandedOff || !claimRexChildDelivery(running)) return;
 			outstandingWork.delivery(running.id, () => pi.sendMessage(
 				{
 					customType: "subagent_result",

@@ -47,6 +47,7 @@ import {
 	widgetManager,
 } from "./state.ts";
 import { type WaitRuntime, waitForSubagentResult as waitForSubagentResultWithRuntime } from "./wait.ts";
+import { recordRexChild } from "./rex-child-records.ts";
 import { restartSubagentForTimeoutWrapUp } from "./timeout-wrap-up.ts";
 import { requestVerifiedRunCancel } from "../vf/run/client.ts";
 
@@ -276,6 +277,7 @@ function getInteractiveWatchRuntime(): InteractiveWatchRuntime {
 }
 
 export async function watchSubagent(running: RunningSubagent, signal?: AbortSignal) {
+	recordRexChild(running);
 	return watchSubagentWithRuntime(running, getInteractiveWatchRuntime(), signal ?? moduleAbortController.signal);
 }
 

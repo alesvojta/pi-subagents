@@ -35,6 +35,7 @@ import {
 } from "../tools/timeout-reminders.ts";
 import { SPAWNING_TOOL_NAMES } from "../tools/tool-names.ts";
 import type { RunningSubagent } from "../types.ts";
+import { refreshRexChildRecord } from "./rex-child-records.ts";
 
 export interface TimeoutWrapUpRuntime {
 	getShellReadyDelayMs(): number;
@@ -271,6 +272,7 @@ export async function restartSubagentForTimeoutWrapUp(
 		}
 		running.doneSentinelFile = doneSentinelFile;
 		running.zellijTarget = zellijTarget;
+		refreshRexChildRecord(running);
 	} catch (error) {
 		// Nothing consumed the capsule; do not leave credentials behind.
 		disposeCapsule?.();

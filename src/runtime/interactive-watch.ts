@@ -182,8 +182,12 @@ export async function watchSubagent(
 			}
 		}
 	} finally {
-		disposeSubagentLaunchCapsule(running);
-		runtime.cleanupNoSessionSessionFile(running);
+		// A handed-off child keeps running for the next parent: its capsule,
+		// pane, and transcript are no longer this watcher's to clean up.
+		if (!running.rexHandedOff) {
+			disposeSubagentLaunchCapsule(running);
+			runtime.cleanupNoSessionSessionFile(running);
+		}
 	}
 }
 
@@ -272,6 +276,9 @@ async function watchInteractiveGeneration(
 			sessionFile,
 			pollResult,
 		});
+		// The parent handed this child off while the exit was in flight; the
+		// next parent reads the same exit from Rex, so leave the pane alone.
+		if (running.rexHandedOff) return { kind: "result", result: buildInteractiveCancellationResult(running) };
 		const exitSignal = pollResult.outputTokens === undefined ? consumeSubagentExitSignal(sessionFile) : undefined;
 		if (
 			running.timeoutWrapUp &&
@@ -333,6 +340,7 @@ async function watchInteractiveGeneration(
 			errorMessage,
 			signalAborted: signal.aborted,
 		});
+		if (running.rexHandedOff && signal.aborted) return { kind: "result", result: buildInteractiveCancellationResult(running) };
 		cleanupDoneSentinel(running);
 		try {
 			await runtime.closeRunningSurface(running);
@@ -383,7 +391,7 @@ async function watchInteractiveGeneration(
 		};
 	} finally {
 		if (deadlineTimer) clearTimeout(deadlineTimer);
-		disposeSubagentLaunchCapsule(running);
+		if (!running.rexHandedOff) disposeSubagentLaunchCapsule(running);
 	}
 }
 

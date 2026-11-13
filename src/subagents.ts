@@ -86,6 +86,8 @@ import { registerJobTools } from "./tools/job-tools.ts";
 import { registerSubagentsView } from "./tools/subagents-view.ts";
 import { SUBAGENT_TOOL_NAME } from "./tools/tool-names.ts";
 import { adoptVerifiedRuns } from "./vf/run/adopt.ts";
+import { setRexChildRecordScope } from "./runtime/rex-child-records.ts";
+import { reattachRexChildren } from "./runtime/rex-reattach.ts";
 import { createOrchestratorController } from "./runtime/orchestrator-controller.ts";
 
 export { classifyAssistantMessageForMixedBatch as classifyAssistantMessageForMixedBatchForTest } from "./runtime/batch-classifier.ts";
@@ -214,6 +216,23 @@ export default function subagentsExtension(pi: ExtensionAPI) {
 			// Adoption is best-effort at startup; a failure must never block
 			// the session from starting.
 		});
+		// Rex pane children survive a reload (and a quit with
+		// parent-close-policy continue); watch this session's own again.
+		const sessionId = ctx.sessionManager.getSessionId?.() ?? "";
+		setRexChildRecordScope({ cwd: ctx.cwd, sessionId });
+		if (sessionId && ctx.mode !== "print") {
+			try {
+				reattachRexChildren(pi, { cwd: ctx.cwd, sessionId }, {
+					watchSubagent,
+					wireSubagentSteerBack,
+					getContextWindow: (modelRef) => widgetManager.resolveModelContextWindow(modelRef),
+					startWidgetRefresh,
+					updateWidget: () => widgetManager.update(),
+				});
+			} catch {
+				// Reattach is best-effort; the records stay for the next start.
+			}
+		}
 
 		if (!shouldRegister(SUBAGENT_TOOL_NAME)) return;
 
@@ -361,7 +380,8 @@ export default function subagentsExtension(pi: ExtensionAPI) {
 		moduleAbortController.abort();
 		widgetManager.reset();
 		resetSubagentBatchStopRequest();
-		await shutdownSubagentsForParentExit();
+		await shutdownSubagentsForParentExit({ reason: event.reason });
+		setRexChildRecordScope(undefined);
 		if (ctx.hasUI) {
 			ctx.ui.setWidget("subagent-status", undefined);
 		}

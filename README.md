@@ -880,6 +880,8 @@ parent-close-policy: continue
 
 The default is `terminate`.
 
+`/reload` is not a parent exit for interactive Rex children: they keep running whatever their policy, and the reloaded parent watches them again. See [Reattach after reload or restart](#reattach-after-reload-or-restart).
+
 ## UI
 
 The parent session gets a live widget above the editor. It shows running children, elapsed time, activity, and context usage.
@@ -995,6 +997,12 @@ Parent callbacks and automatic child cleanup apply to children launched by this 
 Recorded Rex children can resume only in their original Rex project session. Resumes between Rex and another recorded backend are rejected. Existing cross-backend resumes that do not involve Rex remain allowed.
 
 The optional `set_tab_title` tool names only the child block. It does not rename a shared Rex window or project session. It reports `Title unchanged` when a manual title or ownership check prevents a rename. Existing model/title extensions remain responsible for their model-tag and task-title policy.
+
+### Reattach after reload or restart
+
+An interactive Rex child keeps running when the parent reloads (`/reload`), whatever its `parent-close-policy`. A child with `parent-close-policy: continue` also keeps running when the parent quits or switches sessions. When that parent session starts again, it shows the child in the widget again and watches it through the shared event stream. A child that finished in the meantime is resolved from the block's `last_exit` and its result is delivered then. A pane that disappeared is reported as closed only on Rex's exact `not found` answer for that block. A transport error just keeps the parent waiting.
+
+Each such child has a record in the parent session's artifact directory (`<session>/rex-children/<id>.json`). The parent reads only its own session's records and checks the recorded block ownership, so it never adopts a pane another session launched. Whoever delivers the result first removes the record, which makes delivery exactly-once across reloads and parent processes. A reattached child is always delivered as an async result, even if it was launched as blocking. Print-mode (`-p`) runs do not reattach; the records wait for the next interactive start of that session. Other backends keep today's behavior: their interactive children follow `parent-close-policy` on reload too.
 
 ### Rex background shell jobs
 

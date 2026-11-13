@@ -193,6 +193,10 @@ export interface RunningSubagent {
 	zellijTarget?: { sessionName: string; parentPaneId: number };
 	/** Captured child ownership; cleanup must not depend on the parent block remaining live. */
 	rexTarget?: import("./mux/rex.ts").RexChildTarget;
+	/** Durable record that lets a reloaded or restarted parent watch this Rex child again. */
+	rexRecordFile?: string;
+	/** Set when this parent stops watching a still-running Rex child so a later parent can reattach it. */
+	rexHandedOff?: boolean;
 	surfaceClosePromise?: Promise<void>;
 }
 
