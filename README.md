@@ -996,6 +996,8 @@ Parent callbacks and automatic child cleanup apply to children launched by this 
 
 Recorded Rex children can resume only in their original Rex project session. Resumes between Rex and another recorded backend are rejected. Existing cross-backend resumes that do not involve Rex remain allowed.
 
+Each Rex child block shows its status (Rex program status, OSC 7501): working, blocked on a dialog, done, or error. Pi reports these states itself while it runs. If the child crashes, is killed by a signal, or exits with a non-zero code, the child launcher reports `error` in the same status record, because Pi can no longer report it. A clean exit leaves the status to Pi. Other backends get no status output.
+
 The optional `set_tab_title` tool names only the child block. It does not rename a shared Rex window or project session. It reports `Title unchanged` when a manual title or ownership check prevents a rename. Existing model/title extensions remain responsible for their model-tag and task-title policy.
 
 ### Reattach after reload or restart

@@ -1,4 +1,4 @@
-import { readFileSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { readFileSync, rmdirSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
 import { spawn } from "node:child_process";
 
@@ -120,24 +120,46 @@ const clearProcessId = () => {
 	} catch {}
 };
 
+// Pi reports its own Rex program status (OSC 7501) while it runs, but a crash or
+// a timeout kill ends it before it can report the failure. This launcher is the
+// pane's own process, so it reports that ending in the same root record.
+function reportRexError(message) {
+	if (!capsule.rexParent) return;
+	const msg = Buffer.from(message, "utf8").toString("base64");
+	try {
+		writeSync(1, `\x1b]7501;state=error:app=pi:msg=${msg}\x1b\\`);
+	} catch {
+		// The pane is already gone; there is nothing left to show the status in.
+	}
+}
+const childName = env.PI_SUBAGENT_NAME || "subagent";
+
 const child = spawn(capsule.command, capsule.args, {
 	cwd: capsule.cwd || undefined,
 	env,
 	stdio: "inherit",
 });
 
+let stopSignal;
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-	process.on(signal, () => child.kill(signal));
+	process.on(signal, () => {
+		stopSignal ??= signal;
+		child.kill(signal);
+	});
 }
 
 child.on("error", (error) => {
 	clearProcessId();
 	process.stderr.write(`run-child: ${error?.message ?? error}\n`);
+	reportRexError(`${childName} failed to start`);
 	process.exit(1);
 });
 
 child.on("exit", (code, signal) => {
 	clearProcessId();
+	// A forwarded stop is a failure even if the child then exits cleanly.
+	if (signal || stopSignal) reportRexError(`${childName} was stopped by ${signal ?? stopSignal}`);
+	else if (code !== 0) reportRexError(`${childName} exited with code ${code ?? "unknown"}`);
 	if (signal) {
 		// Re-raise with default handlers so the launcher dies by the same signal;
 		// our forwarders would otherwise swallow the self-kill and exit 0.
