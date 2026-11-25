@@ -2,7 +2,7 @@ import { assert, describe, it, writeExecutable, writeFileSync } from "../support
 import { getMuxBackend, requireMuxBackend } from "../../src/mux/core.ts";
 import { closeSurface, closeSurfaceAsync, readScreen, readScreenAsync, sendCommand, sendShellCommand } from "../../src/mux/io.ts";
 import { createSurface, createSurfaceSplit, renameCurrentTab, renameWorkspace } from "../../src/mux/surfaces.ts";
-import { createRexCommandSurface, focusRexChild, RexPaneGoneError, waitForRexExit, rexChildTarget } from "../../src/mux/rex.ts";
+import { createRexCommandSurface, focusRexChild, RexPaneGoneError, rexCaller, waitForRexExit, rexChildTarget } from "../../src/mux/rex.ts";
 import { pollForExit } from "../../src/mux/poll.ts";
 import { REX_CHILD, REX_PARENT, REX_SESSION, useFakeRex } from "../support/rex.ts";
 
@@ -18,11 +18,20 @@ describe("native Rex backend", () => {
 		assert.equal(getMuxBackend(), "rex");
 	});
 
+	it("resolves the caller's session from REX_BLOCK and still honors a matching explicit REX_SESSION", () => {
+		useFakeRex();
+		assert.equal(process.env.REX_SESSION, undefined);
+		assert.deepEqual(rexCaller(), { sessionId: REX_SESSION, blockId: REX_PARENT });
+		process.env.REX_SESSION = REX_SESSION;
+		assert.deepEqual(rexCaller(), { sessionId: REX_SESSION, blockId: REX_PARENT });
+		assert.equal(getMuxBackend(), "rex");
+	});
+
 	it("fails closed for mixed, incomplete, invalid, forced-conflicting and absent contexts", () => {
 		for (const changes of [
 			{ HERDR_ENV: "1" }, { HERDR_PANE_ID: "w1:p1" }, { HERDR_TAB_ID: "w1:t1" },
-			{ REX_BLOCK: undefined }, { REX_SESSION: undefined }, { REX_BLOCK: "focused" },
-			{ REX_SESSION: "work" }, { PI_SUBAGENT_MUX: "herdr" }, { PI_SUBAGENT_MUX: "tmux" },
+			{ REX_BLOCK: undefined }, { REX_BLOCK: "focused" },
+			{ REX_SESSION: "work" }, { REX_SESSION: "session:55555555-5555-4555-8555-555555555555" }, { PI_SUBAGENT_MUX: "herdr" }, { PI_SUBAGENT_MUX: "tmux" },
 			{ PI_SUBAGENT_MUX: "typo" }, { TMUX: "outer" },
 			{ REX_SESSION: undefined, REX_BLOCK: undefined },
 		]) {

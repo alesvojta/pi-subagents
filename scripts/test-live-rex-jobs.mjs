@@ -34,7 +34,8 @@ try {
     "--shell=none", "--json", "--", process.execPath, "-e", "setInterval(()=>{},1000)");
   session = created.session_id;
   for (const key of ["HERDR_ENV", "HERDR_PANE_ID", "HERDR_TAB_ID", "TMUX", "ZELLIJ", "PI_SUBAGENT_MUX"]) delete process.env[key];
-  process.env.REX_SESSION = session;
+  // Rex terminals set only REX_BLOCK; the session is resolved from it.
+  delete process.env.REX_SESSION;
   process.env.REX_BLOCK = created.initial_windows[0].block_ids[0];
 
   const jobsDir = getSessionJobsDir(root, "smoke-session");

@@ -134,6 +134,11 @@ describe("run-child launcher", () => {
 		const REX_CHILD = "block:01a1d456-8215-7be2-b39c-a71f51c3e0ca";
 		const STATUS_PREFIX = "\x1b]7501;state=error:app=pi:msg=";
 		const STATUS_END = "\x1b\\";
+		// Rex terminals set only REX_BLOCK; the launcher looks the pane's session up from it.
+		const fakeRexDir = createTestDir();
+		writeFileSync(join(fakeRexDir, "rex"), `#!${process.execPath}\nconst block = process.argv[5];\n` +
+			`console.log(JSON.stringify({ session_id: ${JSON.stringify(REX_SESSION)}, block: { block_id: block } }));\n`, { mode: 0o700 });
+		const PANE_ENV = { REX_BLOCK: REX_CHILD, PATH: `${fakeRexDir}:${process.env.PATH ?? "/usr/bin"}` };
 
 		function runRexLauncher(args: string[], rex = true) {
 			return runLauncher(
@@ -145,7 +150,7 @@ describe("run-child launcher", () => {
 					paneIdentityKeys: [],
 					...(rex ? { rexParent: { sessionId: REX_SESSION, blockId: REX_PARENT } } : {}),
 				},
-				{ REX_SESSION, REX_BLOCK: REX_CHILD, PATH: process.env.PATH ?? "/usr/bin" },
+				PANE_ENV,
 			);
 		}
 
@@ -180,7 +185,7 @@ describe("run-child launcher", () => {
 				rexParent: { sessionId: REX_SESSION, blockId: REX_PARENT },
 			}, root);
 			const launcher = spawn(process.execPath, [LAUNCHER_PATH, capsulePath], {
-				env: { REX_SESSION, REX_BLOCK: REX_CHILD, PATH: process.env.PATH ?? "/usr/bin" },
+				env: PANE_ENV,
 			});
 			let stdout = "";
 			launcher.stdout.setEncoding("utf8");

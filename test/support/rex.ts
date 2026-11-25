@@ -45,7 +45,9 @@ if (args[1] === 'session' && args[2] === 'inspect') {
   ({ window_id, layers: [{ kind: 'tiled', layout: layout(blocks.filter(b => windowOf(b) === window_id)) }] })) });
  process.exit(0);
 }
-if (args[args.indexOf('-s') + 1] !== ${JSON.stringify(REX_SESSION)}) process.exit(90);
+// Like Rex, a full block ID may stand in for the session that holds it.
+const scope = args[args.indexOf('-s') + 1];
+if (scope !== ${JSON.stringify(REX_SESSION)} && !/^block:/.test(scope ?? '')) process.exit(90);
 const op = args[1];
 if (op === 'block' && args[2] === 'inspect') {
  if (state.lookupFail || (state.parentGone && args[3] === ${JSON.stringify(REX_PARENT)})) process.exit(3);
@@ -109,7 +111,7 @@ if (op === 'block' && args[2] === 'inspect') {
 	for (const key of Object.keys(process.env)) {
 		if (/^(HERDR|CMUX|TMUX|WEZTERM|ZELLIJ|REX)/.test(key)) delete process.env[key];
 	}
-	process.env.REX_SESSION = REX_SESSION;
+	// Rex terminals set only REX_BLOCK; the session is resolved from it.
 	process.env.REX_BLOCK = REX_PARENT;
 	for (const key of ["PI_SUBAGENT_MUX", "PI_SUBAGENT_REX_PLACEMENT", "PI_SUBAGENT_REX_MIN_COLUMNS", "PI_SUBAGENT_REX_MIN_ROWS"]) {
 		delete process.env[key];

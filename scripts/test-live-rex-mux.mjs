@@ -36,7 +36,8 @@ try {
   session = created.session_id;
   anchor = created.initial_windows[0].block_ids[0];
   for (const key of ["HERDR_ENV", "HERDR_PANE_ID", "HERDR_TAB_ID", "TMUX", "CMUX_SOCKET_PATH", "ZELLIJ", "ZELLIJ_SESSION_NAME", "WEZTERM_UNIX_SOCKET", "PI_SUBAGENT_MUX"]) delete process.env[key];
-  process.env.REX_SESSION = session;
+  // Rex terminals set only REX_BLOCK; the session is resolved from it.
+  delete process.env.REX_SESSION;
   process.env.REX_BLOCK = anchor;
   assert.equal(getMuxBackend(), "rex");
   const parent = { sessionId: session, blockId: anchor };
@@ -110,7 +111,7 @@ try {
     const block = create(launch.argv, "Capsule child");
     assert.equal(await waitForRexExit(block, new AbortController().signal, children.get(block)), 0);
     const identity = JSON.parse(readFileSync(resultFile, "utf8"));
-    assert.deepEqual(identity, { cwd: root, session, block, surface: block, args: ["quotes ' and --literal"] });
+    assert.deepEqual(identity, { cwd: root, block, surface: block, args: ["quotes ' and --literal"] });
     close(block);
   } finally { launch.dispose(); }
   console.log("PASS: exact capsule argv, cwd, and fresh child identity");

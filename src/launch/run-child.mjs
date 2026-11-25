@@ -1,6 +1,6 @@
 import { readFileSync, rmdirSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 
 // One-shot child launcher. Reads the launch capsule written by the parent pi
 // process, deletes it, and spawns the child with the merged environment:
@@ -89,11 +89,20 @@ if (capsule.deriveZellijPaneSurface && typeof process.env.ZELLIJ_PANE_ID === "st
 }
 
 if (capsule.rexParent) {
-	const session = process.env.REX_SESSION;
 	const block = process.env.REX_BLOCK;
 	const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-	if (session !== capsule.rexParent.sessionId || !new RegExp(`^block:${uuid}$`, "i").test(block ?? "") ||
-		block === capsule.rexParent.blockId) {
+	const validBlock = new RegExp(`^block:${uuid}$`, "i").test(block ?? "") && block !== capsule.rexParent.blockId;
+	// Rex terminals set only REX_BLOCK; the pane's session is looked up from the block itself.
+	let session;
+	if (validBlock) {
+		try {
+			const inspected = JSON.parse(execFileSync("rex", ["--autostart=false", "block", "inspect", block, "--json", "-s", block],
+				{ encoding: "utf8", timeout: 15_000, stdio: ["ignore", "pipe", "ignore"] }));
+			if (inspected?.block?.block_id === block) session = inspected.session_id;
+		} catch {}
+	}
+	if (!validBlock || session !== capsule.rexParent.sessionId ||
+		(process.env.REX_SESSION !== undefined && process.env.REX_SESSION !== session)) {
 		process.stderr.write("run-child: invalid Rex child identity; refusing inherited parent target\n");
 		process.exit(2);
 	}
@@ -104,7 +113,6 @@ if (capsule.rexParent) {
 	for (const [key, value] of Object.entries(process.env)) {
 		if (key.startsWith("REX") && typeof value === "string") env[key] = value;
 	}
-	env.REX_SESSION = session;
 	env.REX_BLOCK = block;
 	env.PI_SUBAGENT_SURFACE = block;
 	env.PI_SUBAGENT_MUX = "rex";

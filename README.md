@@ -43,7 +43,7 @@ Interactive children open in your current terminal backend. `pi-subagents` suppo
 
 Start `pi` inside the backend you want to use. Leave `PI_SUBAGENT_MUX` unset to detect it, or set it to `rex`, `herdr`, `cmux`, `tmux`, `zellij`, or `wezterm` to select one.
 
-For an interactive UI launch, the backend command must exist and Pi must have a valid caller identity. Rex requires `REX_SESSION` and `REX_BLOCK`. Herdr requires `HERDR_ENV=1` and `HERDR_PANE_ID`. Mixed, incomplete, stale, or conflicting identities and invalid explicit backend preferences produce an error instead of a background child. A running Herdr server alone does not select Herdr. Rex never falls back to Herdr, including when the Rex CLI is missing or a launch fails.
+For an interactive UI launch, the backend command must exist and Pi must have a valid caller identity. Rex requires `REX_BLOCK`, which Rex terminals set; the owning session is looked up from that block. An explicit `REX_SESSION` is still accepted but must name the block's own session. Herdr requires `HERDR_ENV=1` and `HERDR_PANE_ID`. Mixed, incomplete, stale, or conflicting identities and invalid explicit backend preferences produce an error instead of a background child. A running Herdr server alone does not select Herdr. Rex never falls back to Herdr, including when the Rex CLI is missing or a launch fails.
 
 Explicit background agents, headless parents, and verifier runs retain their background behavior. A UI without any mux identity or preference retains the existing headless fallback.
 

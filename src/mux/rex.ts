@@ -34,10 +34,35 @@ export function rexChildTarget(parent: RexTarget, blockId: string): RexChildTarg
 	return { sessionId: parent.sessionId, blockId, parentBlockId: parent.blockId };
 }
 
+/** A block never moves between sessions, so a resolved owner stays valid for the process. */
+const blockSessions = new Map<string, string>();
+
+/** The session that holds a block; Rex accepts a full block ID wherever a session goes. */
+function rexBlockSession(blockId: string): string | null {
+	const cached = blockSessions.get(blockId);
+	if (cached) return cached;
+	try {
+		const value = JSON.parse(execFileSync("rex", ["--autostart=false", "block", "inspect", blockId, "--json", "-s", blockId], OPTIONS));
+		if (value?.block?.block_id !== blockId || !SESSION.test(value?.session_id ?? "")) return null;
+		blockSessions.set(blockId, value.session_id);
+		return value.session_id;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Rex terminals set only REX_BLOCK; the session is looked up from the block.
+ * An explicit REX_SESSION is still honored, but must name the block's own session.
+ */
 export function rexCaller(env: NodeJS.ProcessEnv = process.env): RexTarget | null {
-	if (!SESSION.test(env.REX_SESSION ?? "") || !BLOCK.test(env.REX_BLOCK ?? "")) return null;
+	const blockId = env.REX_BLOCK ?? "";
+	const explicit = env.REX_SESSION;
+	if (!BLOCK.test(blockId) || (explicit !== undefined && !SESSION.test(explicit))) return null;
 	if (["HERDR_ENV", "HERDR_PANE_ID", "HERDR_TAB_ID"].some((key) => env[key] !== undefined)) return null;
-	return { sessionId: env.REX_SESSION!, blockId: env.REX_BLOCK! };
+	const sessionId = rexBlockSession(blockId);
+	if (!sessionId || (explicit !== undefined && explicit !== sessionId)) return null;
+	return { sessionId, blockId };
 }
 
 function scopedArgs(target: RexTarget, args: string[]): string[] {
@@ -60,13 +85,13 @@ export function inspectRexBlock(target: RexTarget): { block_id: string; window_i
 
 export function requireRexCaller(): RexTarget {
 	const target = rexCaller();
-	if (!target) throw new Error("Rex requires an unambiguous REX_SESSION and REX_BLOCK; no backend fallback is allowed");
+	if (!target) throw new Error("Rex requires a REX_BLOCK that Rex can resolve to its session; no backend fallback is allowed");
 	inspectRexBlock(target);
 	return target;
 }
 
 export function isRexRuntimeAvailable(hasCommand: (command: string) => boolean): boolean {
-	if (!rexCaller() || !hasCommand("rex")) return false;
+	if (!hasCommand("rex") || !rexCaller()) return false;
 	try { requireRexCaller(); return true; } catch { return false; }
 }
 

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import {
 	getMuxBackend,
+	requireRexCaller,
 	resolveHerdrPlacementPolicy,
 	resolveRexPlacementPolicy,
 	resolveZellijPlacementPolicy,
@@ -111,7 +112,7 @@ export async function coordinateSubagentLaunch(
 		},
 	);
 	if (options.mode === "interactive") launchMetadata.muxBackend = getMuxBackend() ?? undefined;
-	if (launchMetadata.muxBackend === "rex") launchMetadata.rexSessionId = process.env.REX_SESSION;
+	if (launchMetadata.muxBackend === "rex") launchMetadata.rexSessionId = requireRexCaller().sessionId;
 	const storage = new ChildSessionStorage(prepared.subagentSessionFile);
 	// Standalone Rex sessions still need durable backend ownership before a later resume.
 	if (existsSync(prepared.subagentSessionFile) || launchMetadata.muxBackend === "rex") {

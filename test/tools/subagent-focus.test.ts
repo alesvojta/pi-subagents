@@ -56,7 +56,7 @@ describe("subagent pane focus", () => {
 		assert.throws(() => focusSubagent("deadbeef"), /No running subagent deadbeef in this session/);
 		f.updateState(() => ({ closedBlocks: [REX_CHILD] }));
 		assert.throws(() => focusSubagent("scout"), /pane of subagent scout \(a1b2c3d4\) is gone/);
-		delete process.env.REX_SESSION;
+		delete process.env.REX_BLOCK;
 		assert.throws(() => focusSubagent("scout"), /needs Rex/);
 		assert.equal(focusCalls(f).length, 5, "only the gone pane's focus attempt reaches Rex");
 	});

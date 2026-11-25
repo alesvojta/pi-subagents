@@ -95,9 +95,9 @@ export function muxSetupHint(): string {
 		return "Start pi inside zellij (`zellij --session pi`, then run `pi`).";
 	}
 	if (pref === "wezterm") return "Start pi inside WezTerm.";
-	if (pref === "rex") return "Start pi inside Rex with a valid REX_SESSION and REX_BLOCK; do not mix multiplexer identities.";
+	if (pref === "rex") return "Start pi inside a Rex terminal (it sets REX_BLOCK); do not mix multiplexer identities.";
 	if (pref === "herdr") return "Start pi inside Herdr (`herdr`, then run `pi`).";
-	return "Start pi inside Rex (with REX_SESSION and REX_BLOCK), Herdr (`herdr`, then run `pi`), cmux (`cmux pi`), tmux (`tmux new -A -s pi 'pi'`), zellij (`zellij --session pi`, then run `pi`), or WezTerm.";
+	return "Start pi inside a Rex terminal (it sets REX_BLOCK), Herdr (`herdr`, then run `pi`), cmux (`cmux pi`), tmux (`tmux new -A -s pi 'pi'`), zellij (`zellij --session pi`, then run `pi`), or WezTerm.";
 }
 
 export function requireMuxBackend(): MuxBackend {
