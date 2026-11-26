@@ -85,7 +85,7 @@ describe("resume spawn grant", () => {
 			PI_SUBAGENT_SPAWN_BUDGET: "0",
 			PI_SUBAGENT_SPAWNABLE: "",
 			PI_SUBAGENT_SPAWN_WIDTH_EFFECTIVE: "",
-			denyToolsToAdd: ["subagent", "subagent_resume", "subagent_kill", "subagent_peek"],
+			denyToolsToAdd: ["subagent", "subagent_resume", "subagent_kill", "subagent_peek", "subagent_steer"],
 		});
 		assert.deepEqual(buildResumeSpawnEnv({ spawnableAgents: true }, 2, 3), {
 			PI_SUBAGENT_SPAWN_BUDGET: "2",
@@ -120,7 +120,7 @@ describe("resume spawn grant", () => {
 		assert.deepEqual(buildResumeSpawnEnv({ spawnableAgents: true }, narrowedGranted, null).denyToolsToAdd, []);
 		assert.deepEqual(await getPersistedSessionParityArgsForTest(metadata, "background", narrowedGranted > 0), [
 			"--tools",
-			"exec_command,caller_ping,subagent_done,subagent,subagent_resume,subagent_kill,subagent_peek",
+			"exec_command,caller_ping,subagent_done,subagent,subagent_resume,subagent_kill,subagent_peek,subagent_steer",
 			"--no-approve",
 		]);
 
@@ -130,6 +130,7 @@ describe("resume spawn grant", () => {
 			"subagent_resume",
 			"subagent_kill",
 			"subagent_peek",
+			"subagent_steer",
 		]);
 		assert.deepEqual(await getPersistedSessionParityArgsForTest(metadata, "background", narrowedExhausted > 0), [
 			"--tools",

@@ -84,8 +84,9 @@ import {
 } from "./tools/subagent-tools.ts";
 import { registerJobTools } from "./tools/job-tools.ts";
 import { registerSubagentPeekTool } from "./tools/subagent-peek.ts";
+import { registerSubagentSteerTool } from "./tools/subagent-steer.ts";
 import { registerSubagentsView } from "./tools/subagents-view.ts";
-import { SUBAGENT_PEEK_TOOL_NAME, SUBAGENT_TOOL_NAME } from "./tools/tool-names.ts";
+import { SUBAGENT_PEEK_TOOL_NAME, SUBAGENT_STEER_TOOL_NAME, SUBAGENT_TOOL_NAME } from "./tools/tool-names.ts";
 import { adoptVerifiedRuns } from "./vf/run/adopt.ts";
 import { setRexChildRecordScope } from "./runtime/rex-child-records.ts";
 import { reattachRexChildren } from "./runtime/rex-reattach.ts";
@@ -415,6 +416,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
 	});
 
 	if (shouldRegister(SUBAGENT_PEEK_TOOL_NAME)) registerSubagentPeekTool(pi);
+	if (shouldRegister(SUBAGENT_STEER_TOOL_NAME)) registerSubagentSteerTool(pi);
 
 	registerSubagentResumeTool(pi, shouldRegister, {
 		getShellReadyDelayMs,

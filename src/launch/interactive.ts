@@ -6,6 +6,7 @@ import { createRexCommandSurface, requireRexCaller, rexChildTarget } from "../mu
 import { getZellijShellCommand, resolveZellijTarget } from "../mux/zellij-runtime.ts";
 import { createSurface, getMuxBackend, sendShellCommand } from "../mux.ts";
 import { clearSubagentExitSidecar } from "../session/exit-sidecar.ts";
+import { clearSteerInbox } from "../session/steer-inbox.ts";
 import { buildPiPromptArgs, getDoneSentinelFile } from "../session/session-files.ts";
 import { getSubagentToolLaunchArgs } from "../tools/policy.ts";
 import { SET_TAB_TITLE_TOOL_NAME } from "../tools/tool-names.ts";
@@ -185,6 +186,7 @@ export async function launchInteractiveSubagent(
 
 	const { launchEntryCount } = launch;
 	clearSubagentExitSidecar(prepared.subagentSessionFile);
+	clearSteerInbox(prepared.subagentSessionFile);
 	const { command, argv, capsulePath, dispose } = buildInteractiveShellCommand({
 		cwd: launch.forcedCwd ?? prepared.runtimePaths.effectiveCwd ?? undefined,
 		piArgs,

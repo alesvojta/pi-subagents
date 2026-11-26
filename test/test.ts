@@ -2,6 +2,7 @@ import "./auto-exit.test.ts";
 import "./session/session.test.ts";
 import "./session/child-session-storage.test.ts";
 import "./session/exit-sidecar.test.ts";
+import "./session/steer-inbox.test.ts";
 
 import "./tools/subagent-done.test.ts";
 import "./tools/caller-ping.test.ts";
@@ -27,6 +28,7 @@ import "./tools/provider-error-recovery.test.ts";
 import "./tools/subagents-view.test.ts";
 import "./tools/subagent-focus.test.ts";
 import "./tools/subagent-peek.test.ts";
+import "./tools/subagent-steer.test.ts";
 import "./tools/agents-tab-toggle.test.ts";
 import "./tools/orchestrator-view.test.ts";
 import "./tools/message-renderers.test.ts";

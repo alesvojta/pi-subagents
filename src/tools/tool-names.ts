@@ -10,6 +10,7 @@ export const SUBAGENT_TOOL_NAME = "subagent";
 export const SUBAGENT_RESUME_TOOL_NAME = "subagent_resume";
 export const SUBAGENT_KILL_TOOL_NAME = "subagent_kill";
 export const SUBAGENT_PEEK_TOOL_NAME = "subagent_peek";
+export const SUBAGENT_STEER_TOOL_NAME = "subagent_steer";
 export const SET_TAB_TITLE_TOOL_NAME = "set_tab_title";
 export const REX_JOB_RUN_TOOL_NAME = "rex_job_run";
 export const REX_JOB_LIST_TOOL_NAME = "rex_job_list";
@@ -35,6 +36,7 @@ export const SPAWNING_TOOL_NAMES: ReadonlySet<string> = new Set([
 	SUBAGENT_RESUME_TOOL_NAME,
 	SUBAGENT_KILL_TOOL_NAME,
 	SUBAGENT_PEEK_TOOL_NAME,
+	SUBAGENT_STEER_TOOL_NAME,
 ]);
 
 /**
@@ -48,6 +50,7 @@ export const PI_SUBAGENTS_INTERNAL_TOOL_NAMES: ReadonlySet<string> = new Set([
 	SUBAGENT_RESUME_TOOL_NAME,
 	SUBAGENT_KILL_TOOL_NAME,
 	SUBAGENT_PEEK_TOOL_NAME,
+	SUBAGENT_STEER_TOOL_NAME,
 	SET_TAB_TITLE_TOOL_NAME,
 ]);
 
@@ -60,5 +63,6 @@ export const ORCHESTRATOR_ALLOWED_TOOL_NAMES: ReadonlySet<string> = new Set([
 	SUBAGENT_KILL_TOOL_NAME,
 	SUBAGENT_RESUME_TOOL_NAME,
 	SUBAGENT_PEEK_TOOL_NAME,
+	SUBAGENT_STEER_TOOL_NAME,
 	SET_TAB_TITLE_TOOL_NAME,
 ]);

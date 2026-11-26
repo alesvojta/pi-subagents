@@ -475,6 +475,7 @@ describe("agent definitions and catalog", () => {
 			"subagent_kill",
 			"subagent_peek",
 			"subagent_resume",
+			"subagent_steer",
 		]);
 		assert.deepEqual([...resolveDenyToolsForTest(coordinator ?? null)], []);
 	});

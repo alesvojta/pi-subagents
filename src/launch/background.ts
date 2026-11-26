@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getSubagentDisplayTitle } from "../agents/titles.ts";
 import { clearSubagentExitSidecar } from "../session/exit-sidecar.ts";
+import { clearSteerInbox } from "../session/steer-inbox.ts";
 import { buildPiPromptArgs } from "../session/session-files.ts";
 import { getSubagentToolLaunchArgs } from "../tools/policy.ts";
 import type { RunningSubagent, SubagentParamsInput } from "../types.ts";
@@ -146,6 +147,7 @@ export async function launchBackgroundSubagent(
 		envVars[PI_SUBAGENT_TIMEOUT_STARTED_AT] = String(startTime);
 	}
 	clearSubagentExitSidecar(prepared.subagentSessionFile);
+	clearSteerInbox(prepared.subagentSessionFile);
 	const child = spawn(invocation.command, invocation.args, {
 		cwd: launch.forcedCwd ?? prepared.runtimePaths.effectiveCwd ?? ctx.cwd,
 		detached: true,

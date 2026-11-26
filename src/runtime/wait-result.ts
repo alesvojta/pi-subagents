@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { CompletedSubagentResult, DeliveryState, RunningSubagent, SubagentResult, WaitParams } from "../types.ts";
 import { formatContextExitNotice, formatFinalContextUsage, formatSessionRef } from "./final-context-usage.ts";
+import { formatUndeliveredSteerNotice, settleUndeliveredSteers } from "./result-router.ts";
 import { hasRealSubagentOutput } from "./state.ts";
 import type { WaitRuntime } from "./wait.ts";
 import { formatTimeoutOutcome, formatTimeoutWrapUpOutcome, getTimeoutResultDetails } from "./timeout-budget.ts";
@@ -14,7 +15,8 @@ function getSubagentWaitPingResult(running: RunningSubagent, result: SubagentRes
 				text:
 					`Sub-agent "${running.name}" requested help and exited. ` +
 					`Resume it with subagent_resume using sessionFile ${result.sessionFile ?? "(missing)"}.` +
-					`\n\nMessage from the subagent:\n${result.ping?.message ?? ""}`,
+					`\n\nMessage from the subagent:\n${result.ping?.message ?? ""}` +
+					formatUndeliveredSteerNotice({ undeliveredSteers: settleUndeliveredSteers(running) }),
 			},
 		],
 		details: {
@@ -35,7 +37,8 @@ function getSubagentWaitPingResult(running: RunningSubagent, result: SubagentRes
 function getSubagentWaitSuccessResult(cached: CompletedSubagentResult) {
 	const sessionRef = formatSessionRef(cached);
 	const contextRef =
-		cached.reportContextUsage === false ? formatContextExitNotice(cached) : formatFinalContextUsage(cached);
+		(cached.reportContextUsage === false ? formatContextExitNotice(cached) : formatFinalContextUsage(cached)) +
+		formatUndeliveredSteerNotice(cached);
 	let text: string;
 	if (cached.timedOut) {
 		// A budget kill is the dominant fact about this run: without it the parent
@@ -208,6 +211,8 @@ export async function waitForSubagentResult(params: WaitParams, runtime: WaitRun
 					{ id: running.id },
 				);
 			}
+			const undeliveredSteers = settleUndeliveredSteers(running);
+			if (undeliveredSteers > 0) completed.undeliveredSteers = undeliveredSteers;
 			completed.deliveryState = "awaited";
 			completed.deliveredTo = "wait";
 			return getSubagentWaitSuccessResult(completed);

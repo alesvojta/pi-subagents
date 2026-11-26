@@ -77,6 +77,7 @@ describe("spawn-related agent fields", () => {
 			"subagent_kill",
 			"subagent_peek",
 			"subagent_resume",
+			"subagent_steer",
 		]);
 	});
 });

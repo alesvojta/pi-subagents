@@ -6,10 +6,12 @@ import { type OverlayRuntime, SubagentsOverlayController, type SubagentsOverlayR
 import { getOrchestratorGuardMessage } from "./overlay/orchestrator-view.ts";
 import { focusSubagent } from "./subagent-focus.ts";
 import { peekSubagent } from "./subagent-peek.ts";
+import { steerSubagent } from "./subagent-steer.ts";
 
 export { SubagentsOverlayController as SubagentsOverlay } from "./overlay/index.ts";
 
-const SUBAGENTS_USAGE = "Usage: /subagents | /subagents focus <id|name> [--zoom] | /subagents peek <id|name> [lines]";
+const SUBAGENTS_USAGE =
+	"Usage: /subagents | /subagents focus <id|name> [--zoom] | /subagents peek <id|name> [lines] | /subagents steer <id|name> <message>";
 
 export function registerSubagentsView(pi: ExtensionAPI, runtime: OverlayRuntime) {
 	let activeOverlay: SubagentsOverlayController | null = null;
@@ -100,10 +102,26 @@ export function registerSubagentsView(pi: ExtensionAPI, runtime: OverlayRuntime)
 		}
 	}
 
+	async function steer(ctx: ExtensionContext, ref: string, message: string): Promise<void> {
+		try {
+			const { outcome, text } = await steerSubagent(ref, message);
+			ctx.ui.notify(text, outcome === "delivered" ? "info" : "warning");
+		} catch (error) {
+			ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+		}
+	}
+
 	pi.registerCommand("subagents", {
-		description: "Open subagent manager, focus a running child's Rex pane, or show the end of its screen",
+		description: "Open subagent manager, focus a running child's Rex pane, show the end of its screen, or send it a message",
 		handler: async (args, ctx) => {
 			const [action, ref, flag, ...rest] = args.trim().split(/\s+/).filter(Boolean);
+			if (action === "steer") {
+				// The message is the raw rest of the line, so its spacing survives.
+				const message = args.trim().replace(/^steer\s+\S+\s*/, "");
+				if (ref && message) await steer(ctx, ref, message);
+				else ctx.ui.notify(SUBAGENTS_USAGE, "warning");
+				return;
+			}
 			if (action) {
 				if (action === "focus" && ref && !rest.length && (!flag || flag === "--zoom")) focus(ctx, ref, flag === "--zoom");
 				else if (action === "peek" && ref && !rest.length && (!flag || /^\d+$/.test(flag)))
