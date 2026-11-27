@@ -10,8 +10,7 @@ import { applyChildSystemPromptOverrides } from "./child-system-prompt.ts";
 import { getPublishedRunningSubagentCount } from "../runtime/nested-lifecycle.ts";
 import { installSubagentContextReminders } from "./context-reminders.ts";
 import { createExitSignalWriter } from "./exit-signal.ts";
-import { installParentSteerReceiver } from "./parent-steer-receiver.ts";
-import { installSubagentTimeoutReminders, PI_SUBAGENT_TIMEOUT_WRAP_UP } from "./timeout-reminders.ts";
+import { installSubagentTimeoutReminders } from "./timeout-reminders.ts";
 import { type FinalContextSnapshot, getFinalContextSnapshot } from "./final-context-snapshot.ts";
 import { isMissingOptionalDependency, optionalRequire } from "./optional-dependency.ts";
 import { ProviderErrorRecoveryController, resolveProviderRecoveryDelaysMs } from "./provider-error-recovery.ts";
@@ -112,8 +111,6 @@ export default function (pi: ExtensionAPI) {
 	const callerPingState = createCallerPingState();
 	const contextReminders = installSubagentContextReminders(pi);
 	installSubagentTimeoutReminders(pi);
-	// The report-only wrap-up continuation takes no new instructions from the parent.
-	if (process.env[PI_SUBAGENT_TIMEOUT_WRAP_UP] !== "1") installParentSteerReceiver(pi);
 
 	function requestShutdown(ctx: { shutdown: () => void }) {
 		setTimeout(() => {

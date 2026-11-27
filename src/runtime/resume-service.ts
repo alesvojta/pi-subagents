@@ -38,7 +38,6 @@ import {
 	sendShellCommand,
 } from "../mux.ts";
 import { clearSubagentExitSidecar } from "../session/exit-sidecar.ts";
-import { clearSteerInbox } from "../session/steer-inbox.ts";
 import { clearSubagentTimeoutSidecar, readSubagentTimeoutSidecar } from "../session/timeout-sidecar.ts";
 import { getEntryCount } from "../session/session.ts";
 import {
@@ -309,7 +308,6 @@ async function resumeSubagentSessionWithoutWidth(
 
 	const entryCountBefore = getEntryCount(sessionFile);
 	clearSubagentExitSidecar(sessionFile);
-	clearSteerInbox(sessionFile);
 	// Read the previous verdict before clearing it: it carries the budgets the
 	// killed run was under, which is the only record for a session mode that
 	// never persisted launch metadata.

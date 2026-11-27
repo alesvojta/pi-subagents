@@ -113,7 +113,7 @@ Enable that and two things change:
 
 1. **Tool restriction.** Removes read, bash, edit, write,
    grep, find, and every other tool except subagent,
-   subagent_kill, subagent_resume, subagent_peek, subagent_steer. The LLMs cannot call what they cannot see.
+   subagent_kill, subagent_resume, subagent_peek. The LLMs cannot call what they cannot see.
 2. **System prompt replacement.** Pi's "expert coding assistant" prompt gets
    replaced with one that defines the orchestrator role: decompose, delegate,
    synthesize. The replacement preserves Pi's `APPEND_SYSTEM.md` content.
@@ -652,23 +652,6 @@ Peek is meant for an occasional progress check, for example when the user asks h
 
 Only children launched by this parent can be read. A Rex child is always read through its saved block ID, never the focused block. A background child has no screen, so the answer says that and adds its current activity and latest assistant text when known. A child that already finished, or whose pane is gone, gets a plain answer instead of a transport error. `subagent_peek` is one of the spawning tools: a child without `spawning` does not get it, `PI_DENY_TOOLS` can remove it, and orchestrator mode keeps it.
 
-### Send a message to a running child
-
-`subagent_steer` (`id`, `message`) sends a short message to a running child: a correction, a new constraint, or context it lacks. The child reads it at its next turn boundary, after its current tool calls finish. An idle child (for example a manual-lifecycle child waiting at its prompt) starts a new turn for it. The user command is `/subagents steer <id|name> <message>`.
-
-The message reaches the child as a custom message wrapped in a `<parent-steer>` tag, so the child knows it comes from its parent and not from an operator. It does not count as operator input: auto-exit stays armed, and the child still closes and returns its result as usual. In the child's pane it shows as "Message from parent agent".
-
-The tool waits up to 3 seconds for the child to take the message into its context and then answers:
-
-- `delivered`: the message is in the child's context.
-- `queued`: the child has not read it yet, usually because a tool call is still running. It reads it at the next turn boundary.
-
-Steer is one-way. The tool does not wait for a reply; the child's reaction arrives with its normal result, or through `caller_ping` if it needs the parent. Messages are capped at 4000 characters. For longer material, write a file and send its path.
-
-The same rules as for `subagent_peek` decide who can be steered: only children launched by this parent, by ID or by name when exactly one running child has it. A child that already finished is refused with a hint to use `subagent_resume` with a follow-up task. A child in its time-limit wrap-up (see `timeout-warn-threshold`) is refused too, because it only writes its final report. When a child finishes before it reads a message, its result says how many messages never reached it. Unread messages are dropped and a later resume does not receive them.
-
-Under the hood, Pi writes each message into a `<session>.steer/` directory next to the child's session file, and the child extension watches that directory. The model never sees these files. `subagent_steer` is one of the spawning tools: a child without `spawning` does not get it, `PI_DENY_TOOLS` can remove it, and orchestrator mode keeps it.
-
 ## Child output
 
 The child's final assistant message is its output.
@@ -865,9 +848,9 @@ deny-tools: bash,edit,write,ask_user
 ---
 ```
 
-By default a child cannot launch subagents: `spawning` is `false`, which removes its `subagent`, `subagent_resume`, `subagent_kill`, `subagent_peek`, and `subagent_steer` tools. Set `spawning` only on agents that coordinate others. The four fields above define what such a child may do; this section adds the rules the table cannot show.
+By default a child cannot launch subagents: `spawning` is `false`, which removes its `subagent`, `subagent_resume`, `subagent_kill`, and `subagent_peek` tools. Set `spawning` only on agents that coordinate others. The four fields above define what such a child may do; this section adds the rules the table cannot show.
 
-`tools:` narrows the child's work tools; it does not revoke a spawn grant. When `spawning` is enabled, `subagent`, `subagent_resume`, `subagent_kill`, `subagent_peek`, and `subagent_steer` stay available alongside a narrowed `tools:` list, exactly like `caller_ping` and `subagent_done`. Use `deny-tools` (or leave `spawning` off) to take them away.
+`tools:` narrows the child's work tools; it does not revoke a spawn grant. When `spawning` is enabled, `subagent`, `subagent_resume`, `subagent_kill`, and `subagent_peek` stay available alongside a narrowed `tools:` list, exactly like `caller_ping` and `subagent_done`. Use `deny-tools` (or leave `spawning` off) to take them away.
 
 `spawn-depth` is what stops two agents that launch each other from looping forever: the allowance drops by one at each level and never rises. `spawn-depth` and `spawn-width` bound a single burst of launches; they do not cap total token use over a long conversation. These fields are guardrails, not a security sandbox — a child that has `bash` or arbitrary extensions can still run `pi` itself.
 

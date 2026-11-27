@@ -113,8 +113,8 @@ describe("subagent peek", () => {
 		assert.match(notes[0], /^Last 1 screen line of the subagent "scout" \(a1b2c3d4\):\n\nworking on it\n/);
 		assert.match(notes[1], /^Last 1 screen line of/);
 		assert.deepEqual(notes.slice(2), [
-			"Usage: /subagents | /subagents focus <id|name> [--zoom] | /subagents peek <id|name> [lines] | /subagents steer <id|name> <message>",
-			"Usage: /subagents | /subagents focus <id|name> [--zoom] | /subagents peek <id|name> [lines] | /subagents steer <id|name> <message>",
+			"Usage: /subagents | /subagents focus <id|name> [--zoom] | /subagents peek <id|name> [lines]",
+			"Usage: /subagents | /subagents focus <id|name> [--zoom] | /subagents peek <id|name> [lines]",
 			'No running subagent matches "nobody".',
 		]);
 	});

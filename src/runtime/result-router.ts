@@ -1,7 +1,6 @@
 import { outstandingWork } from "./outstanding-work.ts";
 import type { CompletedSubagentResult, RunningSubagent, SubagentPingMessageDetails, SubagentResult } from "../types.ts";
 import { formatContextExitNotice, formatFinalContextUsage, formatSessionRef } from "./final-context-usage.ts";
-import { takeUndeliveredSteerCount } from "../session/steer-inbox.ts";
 import { claimRexChildDelivery } from "./rex-child-records.ts";
 import { releaseSpawnWidthSlot } from "./spawn-width.ts";
 import {
@@ -39,7 +38,7 @@ interface RoutedPingOutcome {
 export type RoutedSubagentOutcome = RoutedCompletionOutcome | RoutedPingOutcome;
 
 export function routeSubagentOutcome(options: RouteSubagentOutcomeOptions): RoutedSubagentOutcome {
-	const { pi, running, formatElapsed, updateWidget } = options;
+	const { pi, running, result, formatElapsed, updateWidget } = options;
 	clearSubagentShutdownTimer(running);
 	// A handed-off child is still running for the next parent, and a child
 	// whose record is already gone was delivered by another parent.
@@ -47,10 +46,8 @@ export function routeSubagentOutcome(options: RouteSubagentOutcomeOptions): Rout
 		releaseSpawnWidthSlot(running);
 		runningSubagents.delete(running.id);
 		updateWidget();
-		return { kind: "completion", completed: buildCompletedSubagentResult(running, options.result) };
+		return { kind: "completion", completed: buildCompletedSubagentResult(running, result) };
 	}
-	const undeliveredSteers = settleUndeliveredSteers(running);
-	const result = undeliveredSteers > 0 ? { ...options.result, undeliveredSteers } : options.result;
 	if (result.ping) {
 		runningSubagents.delete(running.id);
 		updateWidget();
@@ -118,26 +115,7 @@ function isAutoExitSession(): boolean {
 }
 
 function getCompletedContextReference(completed: CompletedSubagentResult): string {
-	const usage = completed.reportContextUsage === false ? formatContextExitNotice(completed) : formatFinalContextUsage(completed);
-	return `${usage}${formatUndeliveredSteerNotice(completed)}`;
-}
-
-/**
- * Count the steers this run never read and empty its inbox, once per run, so
- * the routed and the awaited result report the same number and a later resume
- * does not receive stale instructions.
- */
-export function settleUndeliveredSteers(running: RunningSubagent): number {
-	running.undeliveredSteers ??= takeUndeliveredSteerCount(running.sessionFile);
-	return running.undeliveredSteers;
-}
-
-export function formatUndeliveredSteerNotice(result: Pick<SubagentResult, "undeliveredSteers">): string {
-	const count = result.undeliveredSteers ?? 0;
-	if (count <= 0) return "";
-	return count === 1
-		? "\n\nNote: 1 message you sent with subagent_steer never reached this sub-agent; it finished without it."
-		: `\n\nNote: ${count} messages you sent with subagent_steer never reached this sub-agent; it finished without them.`;
+	return completed.reportContextUsage === false ? formatContextExitNotice(completed) : formatFinalContextUsage(completed);
 }
 
 function getCompletedResultDetails(completed: CompletedSubagentResult): Record<string, unknown> {
@@ -181,7 +159,7 @@ function deliverSubagentPing(
 			customType: "subagent_ping",
 			content:
 				`Sub-agent "${ping.name}" needs help (${formatElapsed(result.elapsed)}).\n\n` +
-				`${ping.message}${sessionRef}${formatUndeliveredSteerNotice(result)}`,
+				`${ping.message}${sessionRef}`,
 			display: true,
 			details: {
 				id: running.id,

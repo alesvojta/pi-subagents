@@ -97,8 +97,6 @@ export interface SubagentResult {
 	error?: string;
 	errorMessage?: string;
 	ping?: SubagentPing;
-	/** Parent `subagent_steer` messages that never reached the child's context. */
-	undeliveredSteers?: number;
 }
 
 export interface CompletedSubagentResult extends SubagentResult {
@@ -173,8 +171,6 @@ export interface RunningSubagent {
 	modelRef?: string;
 	/** Exact launch contract reused by an internal timeout wrap-up restart. */
 	launchMetadata?: PersistedSubagentLaunchMetadata;
-	/** Steer messages this run never read, counted once when the run ends. */
-	undeliveredSteers?: number;
 	contextLabel?: string;
 	activity?: string;
 	taskPreview?: string;
